@@ -59,15 +59,24 @@ pub fn part2(inputs: &[Dir]) -> usize {
             Dir::Right(x) => x,
         };
 
-        for _ in 0..*x {
-            pos = match d {
-                Dir::Left(_) => (pos - 1).rem_euclid(100),
-                Dir::Right(_) => (pos + 1).rem_euclid(100),
-            };
-            if pos == 0 {
-                count += 1;
+        count += x / 100;
+
+        pos = match d {
+            Dir::Left(x) => {
+                let temp = (pos - x).rem_euclid(100);
+                if pos != 0 && (temp >= pos || temp == 0) {
+                    count += 1;
+                }
+                temp
             }
-        }
+            Dir::Right(x) => {
+                let temp = (pos + x).rem_euclid(100);
+                if temp < pos {
+                    count += 1;
+                }
+                temp
+            }
+        };
     }
 
     count as usize
