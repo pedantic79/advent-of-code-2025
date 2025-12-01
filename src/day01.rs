@@ -14,12 +14,12 @@ impl FromStr for Dir {
     type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = &s[0..1];
-        let num = s[1..].parse().unwrap();
+        let (b, num) = s.split_at(1);
+        let num = num.parse().unwrap();
         Ok(match b {
             "L" => Self::Left(num),
             "R" => Self::Right(num),
-            _ => unreachable!(),
+            _ => unimplemented!("{b} is unexpected prefix"),
         })
     }
 }
@@ -30,17 +30,17 @@ pub fn generator(input: &str) -> Vec<Dir> {
 }
 
 #[aoc(day1, part1)]
-pub fn part1(inputs: &[Dir]) -> usize {
-    let mut pos: i32 = 50;
+pub fn part1(spins: &[Dir]) -> usize {
+    let mut dial = 50;
     let mut count = 0;
 
-    for d in inputs {
-        pos = match d {
-            Dir::Left(x) => (pos - x).rem_euclid(100),
-            Dir::Right(x) => (pos + x).rem_euclid(100),
+    for d in spins {
+        dial = match d {
+            Dir::Left(x) => (dial - x).rem_euclid(100),
+            Dir::Right(x) => (dial + x).rem_euclid(100),
         };
 
-        if pos == 0 {
+        if dial == 0 {
             count += 1;
         }
     }
@@ -49,34 +49,24 @@ pub fn part1(inputs: &[Dir]) -> usize {
 }
 
 #[aoc(day1, part2)]
-pub fn part2(inputs: &[Dir]) -> usize {
-    let mut pos: i32 = 50;
+pub fn part2(spins: &[Dir]) -> usize {
+    let mut dial = 50;
     let mut count = 0;
 
-    for d in inputs {
-        let x = match d {
-            Dir::Left(x) => x,
-            Dir::Right(x) => x,
+    for d in spins {
+        let signed_amount = match d {
+            Dir::Left(x) => -x,
+            Dir::Right(x) => *x,
         };
 
-        count += x / 100;
+        let temp = dial + signed_amount;
+        let new_dial = temp.rem_euclid(100);
 
-        pos = match d {
-            Dir::Left(x) => {
-                let temp = (pos - x).rem_euclid(100);
-                if pos != 0 && (temp >= pos || temp == 0) {
-                    count += 1;
-                }
-                temp
-            }
-            Dir::Right(x) => {
-                let temp = (pos + x).rem_euclid(100);
-                if temp < pos {
-                    count += 1;
-                }
-                temp
-            }
-        };
+        count += (temp / 100).abs();
+        if dial != 0 && temp <= 0 {
+            count += 1;
+        }
+        dial = new_dial
     }
 
     count as usize
