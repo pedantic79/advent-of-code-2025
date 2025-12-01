@@ -1,44 +1,29 @@
-use std::{convert::Infallible, str::FromStr};
-
 use aoc_runner_derive::{aoc, aoc_generator};
 
-use crate::common::parse::parse_lines;
+use crate::common::parse::parse_lines_fn;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Dir {
-    Left(i32),
-    Right(i32),
-}
+const DIAL_SIZE: i32 = 100;
+const DIAL_START: i32 = 50;
 
-impl FromStr for Dir {
-    type Err = Infallible;
+fn parse_input(line: &str) -> i32 {
+    let (b, num) = line.split_at(1);
+    let num: i32 = num.parse().unwrap();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (b, num) = s.split_at(1);
-        let num = num.parse().unwrap();
-        Ok(match b {
-            "L" => Self::Left(num),
-            "R" => Self::Right(num),
-            _ => unimplemented!("{b} is unexpected prefix"),
-        })
-    }
+    if "L" == b { -num } else { num }
 }
 
 #[aoc_generator(day1)]
-pub fn generator(input: &str) -> Vec<Dir> {
-    parse_lines(input)
+pub fn generator(input: &str) -> Vec<i32> {
+    parse_lines_fn(input, parse_input)
 }
 
 #[aoc(day1, part1)]
-pub fn part1(spins: &[Dir]) -> usize {
-    let mut dial = 50;
+pub fn part1(spins: &[i32]) -> usize {
+    let mut dial = DIAL_START;
     let mut count = 0;
 
-    for d in spins {
-        dial = match d {
-            Dir::Left(x) => (dial - x).rem_euclid(100),
-            Dir::Right(x) => (dial + x).rem_euclid(100),
-        };
+    for x in spins {
+        dial = (dial + x).rem_euclid(DIAL_SIZE);
 
         if dial == 0 {
             count += 1;
@@ -49,20 +34,15 @@ pub fn part1(spins: &[Dir]) -> usize {
 }
 
 #[aoc(day1, part2)]
-pub fn part2(spins: &[Dir]) -> usize {
-    let mut dial = 50;
+pub fn part2(spins: &[i32]) -> usize {
+    let mut dial = DIAL_START;
     let mut count = 0;
 
-    for d in spins {
-        let signed_amount = match d {
-            Dir::Left(x) => -x,
-            Dir::Right(x) => *x,
-        };
-
+    for signed_amount in spins {
         let temp = dial + signed_amount;
-        let new_dial = temp.rem_euclid(100);
+        let new_dial = temp.rem_euclid(DIAL_SIZE);
 
-        count += (temp / 100).abs();
+        count += (temp / DIAL_SIZE).abs();
         if dial != 0 && temp <= 0 {
             count += 1;
         }
