@@ -1,5 +1,7 @@
 # Advent of Code 2025 - Rust
 
+- [Day 1: Secret Entrance](https://adventofcode.com/2025/day/1)
+  - [solution](src/day01.rs)
 <!-- Insert before -->
 
 See:
