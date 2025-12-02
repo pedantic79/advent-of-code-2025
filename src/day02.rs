@@ -7,7 +7,8 @@ pub struct Range {
     right: String,
 }
 
-//  (1..=n / 2).filter(|&k| n.is_multiple_of(k))
+// precomputed multiples for lengths 0 to 10
+// (1..=n / 2).filter(|&k| n.is_multiple_of(k))
 const MULTIPLES: [&[usize]; 11] = [
     &[],
     &[],
@@ -48,7 +49,13 @@ fn is_invalid_two(s: &[u8]) -> bool {
 
     MULTIPLES[n].iter().any(|&k| {
         let pattern = &s[0..k];
-        (k..n).step_by(k).all(|i| &s[i..i + k] == pattern)
+
+        // the cycle version is much faster than the chunks, repeat, or step_by versions
+        // s.chunks(k).all(|chunk| chunk == pattern)
+        // pattern.repeat(n / k).into_iter().eq(s.iter().copied())
+        // (k..n).step_by(k).all(|i| &s[i..i + k] == pattern)
+
+        pattern.iter().cycle().take(s.len()).eq(s.iter())
     })
 }
 
