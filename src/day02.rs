@@ -71,11 +71,17 @@ fn solve(inputs: &[Range], f: impl Fn(&[u8]) -> bool + Sync) -> usize {
     inputs
         .par_iter()
         .map(|range| {
+            let start = range.left.parse::<usize>().unwrap();
+            let end = range.right.parse::<usize>().unwrap();
+
             // Do math on the strings to loop through the range
             let mut s = range.left.to_string().into_bytes();
             let mut local_total = 0;
-            loop {
+            for x in start..=end {
                 local_total += parse_int_wrapper(&f, &s);
+                if x == end {
+                    break;
+                }
 
                 // loop through the positions in the sting from back to front
                 // to increment the number by 1
@@ -92,11 +98,6 @@ fn solve(inputs: &[Range], f: impl Fn(&[u8]) -> bool + Sync) -> usize {
                         s[i] += 1;
                         break;
                     }
-                }
-                // SAFETY: We know the input is valid UTF-8 since it's all numeric
-                if unsafe { str::from_utf8_unchecked(&s) } == range.right {
-                    local_total += parse_int_wrapper(&f, &s);
-                    break;
                 }
             }
             local_total
