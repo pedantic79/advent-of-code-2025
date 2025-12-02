@@ -1,9 +1,10 @@
 use aoc_runner_derive::{aoc, aoc_generator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Range {
-    left: usize,
-    right: usize,
+    left: String,
+    right: String,
 }
 
 //  (1..=n / 2).filter(|&k| n.is_multiple_of(k))
@@ -21,7 +22,17 @@ const MULTIPLES: [&[usize]; 11] = [
     &[1, 2, 5],
 ];
 
-fn is_invalid_one(s: &str) -> bool {
+fn parse_int_wrapper(f: impl Fn(&[u8]) -> bool, s: &[u8]) -> usize {
+    if f(s) {
+        unsafe { str::from_utf8_unchecked(s) }
+            .parse::<usize>()
+            .unwrap()
+    } else {
+        0
+    }
+}
+
+fn is_invalid_one(s: &[u8]) -> bool {
     if !s.len().is_multiple_of(2) {
         return false;
     }
@@ -29,7 +40,7 @@ fn is_invalid_one(s: &str) -> bool {
     l == r
 }
 
-fn is_invalid_two(s: &str) -> bool {
+fn is_invalid_two(s: &[u8]) -> bool {
     let n = s.len();
     if n < 2 {
         return false;
@@ -49,29 +60,58 @@ pub fn generator(input: &str) -> Vec<Range> {
             let (l, r) = group.split_once('-').unwrap();
 
             Range {
-                left: l.parse().unwrap(),
-                right: r.parse().unwrap(),
+                left: l.to_string(),
+                right: r.to_string(),
             }
         })
         .collect()
 }
 
+fn solve(inputs: &[Range], f: impl Fn(&[u8]) -> bool + Sync) -> usize {
+    inputs
+        .par_iter()
+        .map(|range| {
+            // Do math on the strings to loop through the range
+            let mut s = range.left.to_string().into_bytes();
+            let mut local_total = 0;
+            loop {
+                local_total += parse_int_wrapper(&f, &s);
+
+                // loop through the positions in the sting from back to front
+                // to increment the number by 1
+                let len = s.len();
+                for i in (0..len).rev() {
+                    if s[i] == b'9' {
+                        s[i] = b'0';
+                        // We don't break here since we need to carry over
+                        if i == 0 {
+                            // Handle overflow
+                            s.insert(0, b'1');
+                        }
+                    } else {
+                        s[i] += 1;
+                        break;
+                    }
+                }
+                // SAFETY: We know the input is valid UTF-8 since it's all numeric
+                if unsafe { str::from_utf8_unchecked(&s) } == range.right {
+                    local_total += parse_int_wrapper(&f, &s);
+                    break;
+                }
+            }
+            local_total
+        })
+        .sum()
+}
+
 #[aoc(day2, part1)]
 pub fn part1(inputs: &[Range]) -> usize {
-    inputs
-        .iter()
-        .flat_map(|range| range.left..=range.right)
-        .filter(|s| is_invalid_one(&s.to_string()))
-        .sum()
+    solve(inputs, is_invalid_one)
 }
 
 #[aoc(day2, part2)]
 pub fn part2(inputs: &[Range]) -> usize {
-    inputs
-        .iter()
-        .flat_map(|range| range.left..=range.right)
-        .filter(|s| is_invalid_two(&s.to_string()))
-        .sum()
+    solve(inputs, is_invalid_two)
 }
 
 #[cfg(test)]
