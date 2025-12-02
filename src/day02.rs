@@ -17,25 +17,10 @@ fn is_invalid_two(s: &str) -> bool {
         return false;
     }
 
-    for k in 1..=n / 2 {
-        if !n.is_multiple_of(k) {
-            continue;
-        }
-
+    (1..=n / 2).filter(|&k| n.is_multiple_of(k)).any(|k| {
         let pattern = &s[0..k];
-        let mut ok = true;
-        for i in (k..n).step_by(k) {
-            if &s[i..i + k] != pattern {
-                ok = false;
-                break;
-            }
-        }
-        if ok {
-            return true;
-        }
-    }
-
-    false
+        (k..n).step_by(k).all(|i| &s[i..i + k] == pattern)
+    })
 }
 
 #[aoc_generator(day2)]
