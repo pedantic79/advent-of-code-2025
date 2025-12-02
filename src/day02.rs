@@ -6,7 +6,25 @@ pub struct Range {
     right: usize,
 }
 
+//  (1..=n / 2).filter(|&k| n.is_multiple_of(k))
+const MULTIPLES: [&[usize]; 11] = [
+    &[],
+    &[],
+    &[1],
+    &[1],
+    &[1, 2],
+    &[1],
+    &[1, 2, 3],
+    &[1],
+    &[1, 2, 4],
+    &[1, 3],
+    &[1, 2, 5],
+];
+
 fn is_invalid_one(s: &str) -> bool {
+    if !s.len().is_multiple_of(2) {
+        return false;
+    }
     let (l, r) = s.split_at(s.len() / 2);
     l == r
 }
@@ -17,7 +35,7 @@ fn is_invalid_two(s: &str) -> bool {
         return false;
     }
 
-    (1..=n / 2).filter(|&k| n.is_multiple_of(k)).any(|k| {
+    MULTIPLES[n].iter().any(|&k| {
         let pattern = &s[0..k];
         (k..n).step_by(k).all(|i| &s[i..i + k] == pattern)
     })
