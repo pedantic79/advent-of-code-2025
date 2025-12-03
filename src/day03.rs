@@ -8,21 +8,23 @@ pub fn generator(input: &str) -> Vec<Vec<u8>> {
 fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
     let mut total = 0;
 
-    let mut digits = Vec::with_capacity(N);
-
     for line in lines {
         let mut idx = 0;
-        let mut num_skips = line.len() - N;
-        digits.clear();
+        let mut skips_remaining = line.len() - N;
+        let mut num = 0;
+        let mut digits_left = N;
 
-        while digits.len() < N {
-            // we find the left-most maximum digit in the range of possible next digits
-            // out of the possible number we can skip
+        while digits_left > 0 {
+            // skip_remaining indicates how many digits we can skip ahead.
+            // This allows us to build a slice of possible next digits to choose from.
+            // idx..idx+1 + skips_remaining is the largest we can look at.
+            // We take the maximum digit from that slice to maximize the resulting number.
+            // We also need to track how many digits we skip to get there, so we can update idx and skips_remaining.
 
-            // we use enumerate + rev + max_by_key to find the position of left-most the maximum digit
-            // rev is important because max_by_key returns the last maximum it finds, not the first, so reversing
-            // the iterator makes it return the left-most maximum
-            let (pos, next_digit) = line[idx..idx + num_skips + 1]
+            // We enumerate + rev + max_by_key to find the position of left-most the maximum digit.
+            // max_by_key returns the last maximum it finds, not the first, so we can fix this by reversing the iterator
+            // to return the left-most maximum rather than the right-most maximum.
+            let (pos, next_digit) = line[idx..idx + 1 + skips_remaining]
                 .iter()
                 .enumerate()
                 .rev()
@@ -30,14 +32,23 @@ fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
                 .map(|(pos, b)| (pos, *b))
                 .unwrap();
 
-            num_skips -= pos;
+            skips_remaining -= pos;
             idx += pos + 1;
-            digits.push(next_digit);
+            digits_left -= 1;
+            num = num * 10 + u64::from(next_digit - b'0');
+
+            // no more skips left, take the rest of the digits because line[idx..idx+1+0] is just 1 digit at this point
+            // It's pointless to use max_by_key when there's only one digit left to choose from.
+            // So we can just append the rest of the digits directly.
+            if skips_remaining == 0 {
+                for &b in &line[idx..] {
+                    num = num * 10 + u64::from(b - b'0');
+                }
+                break;
+            }
         }
 
-        total += digits
-            .iter()
-            .fold(0, |acc, &d| acc * 10 + u64::from(d - b'0'));
+        total += num;
     }
 
     total
