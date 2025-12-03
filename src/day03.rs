@@ -5,6 +5,23 @@ pub fn generator(input: &str) -> Vec<Vec<u8>> {
     input.lines().map(|line| line.as_bytes().to_vec()).collect()
 }
 
+pub fn find_left_most_max(slice: &[u8]) -> (usize, u8) {
+    let mut max = (usize::MIN, u8::MIN);
+
+    for current in slice.iter().copied().enumerate() {
+        // if current.1 == b'9' then we can early exit because 9 is the maximum digit possible
+        if current.1 == b'9' {
+            return current;
+        }
+
+        if current.1 > max.1 {
+            max = current;
+        }
+    }
+
+    max
+}
+
 fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
     let mut total = 0;
 
@@ -19,17 +36,7 @@ fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
             // idx..idx+1 + skips_remaining is the largest we can look at.
             // We take the maximum digit from that slice to maximize the resulting number.
             // We also need to track how many digits we skip to get there, so we can update idx and skips_remaining.
-
-            // We enumerate + rev + max_by_key to find the position of left-most the maximum digit.
-            // max_by_key returns the last maximum it finds, not the first, so we can fix this by reversing the iterator
-            // to return the left-most maximum rather than the right-most maximum.
-            let (pos, next_digit) = line[idx..idx + 1 + skips_remaining]
-                .iter()
-                .enumerate()
-                .rev()
-                .max_by_key(|(_, y)| **y)
-                .map(|(pos, b)| (pos, *b))
-                .unwrap();
+            let (pos, next_digit) = find_left_most_max(&line[idx..idx + 1 + skips_remaining]);
 
             skips_remaining -= pos;
             idx += pos + 1;
@@ -38,15 +45,12 @@ fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
             // no more skips left, take the rest of the digits because line[idx..idx+1+0] is just 1 digit at this point
             // It's pointless to use max_by_key when there's only one digit left to choose from.
             // So we can just append the rest of the digits directly.
-            //
-            // However, this optimization doesn't seem to improve performance significantly.
-            //
-            // if skips_remaining == 0 {
-            //     for &b in &line[idx..] {
-            //         num = num * 10 + u64::from(b - b'0');
-            //     }
-            //     break;
-            // }
+            if skips_remaining == 0 {
+                for &b in &line[idx..] {
+                    num = num * 10 + u64::from(b - b'0');
+                }
+                break;
+            }
         }
 
         total += num;
