@@ -12,9 +12,8 @@ fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
         let mut idx = 0;
         let mut skips_remaining = line.len() - N;
         let mut num = 0;
-        let mut digits_left = N;
 
-        while digits_left > 0 {
+        for _ in 0..N {
             // skip_remaining indicates how many digits we can skip ahead.
             // This allows us to build a slice of possible next digits to choose from.
             // idx..idx+1 + skips_remaining is the largest we can look at.
@@ -34,18 +33,20 @@ fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
 
             skips_remaining -= pos;
             idx += pos + 1;
-            digits_left -= 1;
             num = num * 10 + u64::from(next_digit - b'0');
 
             // no more skips left, take the rest of the digits because line[idx..idx+1+0] is just 1 digit at this point
             // It's pointless to use max_by_key when there's only one digit left to choose from.
             // So we can just append the rest of the digits directly.
-            if skips_remaining == 0 {
-                for &b in &line[idx..] {
-                    num = num * 10 + u64::from(b - b'0');
-                }
-                break;
-            }
+            //
+            // However, this optimization doesn't seem to improve performance significantly.
+            //
+            // if skips_remaining == 0 {
+            //     for &b in &line[idx..] {
+            //         num = num * 10 + u64::from(b - b'0');
+            //     }
+            //     break;
+            // }
         }
 
         total += num;
