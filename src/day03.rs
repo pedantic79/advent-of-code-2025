@@ -9,13 +9,13 @@ pub fn find_left_most_max(slice: &[u8]) -> (usize, u8) {
     let mut max = (usize::MIN, u8::MIN);
 
     for current in slice.iter().copied().enumerate() {
-        // if current.1 == b'9' then we can early exit because 9 is the maximum digit possible
-        if current.1 == b'9' {
-            return current;
-        }
-
         if current.1 > max.1 {
             max = current;
+
+            // if max.1 is 9, we can't do better, so break early
+            if max.1 == b'9' {
+                break;
+            }
         }
     }
 
@@ -43,7 +43,7 @@ fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
             num = num * 10 + u64::from(next_digit - b'0');
 
             // no more skips left, take the rest of the digits because line[idx..idx+1+0] is just 1 digit at this point
-            // It's pointless to use max_by_key when there's only one digit left to choose from.
+            // It's pointless to use find_left_most_max when there's only one digit left to choose from.
             // So we can just append the rest of the digits directly.
             if skips_remaining == 0 {
                 for &b in &line[idx..] {
