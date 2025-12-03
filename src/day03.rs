@@ -5,7 +5,9 @@ pub fn generator(input: &str) -> Vec<Vec<u8>> {
     input.lines().map(|line| line.as_bytes().to_vec()).collect()
 }
 
-pub fn find_left_most_max(slice: &[u8]) -> (usize, u8) {
+fn find_left_most_max(slice: &[u8]) -> (usize, u8) {
+    // There is a bug here, if slice.is_empty(), this will return (usize::MIN, u8::MIN).
+    // However, in our usage of this function, slice is guaranteed to be non-empty.
     let mut max = (usize::MIN, u8::MIN);
 
     for current in slice.iter().copied().enumerate() {
@@ -26,34 +28,36 @@ fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
     let mut total = 0;
 
     for line in lines {
-        let mut idx = 0;
         let mut skips_remaining = line.len() - N;
-        let mut num = 0;
+        let mut idx: usize = 0;
+        let mut joltage = 0;
 
         for _ in 0..N {
-            // skip_remaining indicates how many digits we can skip ahead.
-            // This allows us to build a slice of possible next digits to choose from.
-            // idx..idx+1 + skips_remaining is the largest we can look at.
-            // We take the maximum digit from that slice to maximize the resulting number.
-            // We also need to track how many digits we skip to get there, so we can update idx and skips_remaining.
+            // This works by greedily choosing the largest possible digit at each step.
+            // We can skip up to skips_remaining digits to find the next largest digit.
+            // We start at idx, and look ahead up to idx+1 + skips_remaining.
+            // We find the maximum digit in that range, and append it to our number.
+            // We then update idx to be just after the chosen digit, and reduce skips_remaining by how many digits we skipped.
+            // Repeat until we've chosen N digits.
             let (pos, next_digit) = find_left_most_max(&line[idx..idx + 1 + skips_remaining]);
 
             skips_remaining -= pos;
             idx += pos + 1;
-            num = num * 10 + u64::from(next_digit - b'0');
+            joltage = joltage * 10 + u64::from(next_digit - b'0');
 
-            // no more skips left, take the rest of the digits because line[idx..idx+1+0] is just 1 digit at this point
-            // It's pointless to use find_left_most_max when there's only one digit left to choose from.
-            // So we can just append the rest of the digits directly.
+            // If we have no more skips left, we can take the rest of the digits directly.
+            // This is because line[idx..idx+1+0] is just a single digit at this point.
+            // So it's pointless to use find_left_most_max again.
+            // Instead, we can just append the rest of the digits directly.
             if skips_remaining == 0 {
                 for &b in &line[idx..] {
-                    num = num * 10 + u64::from(b - b'0');
+                    joltage = joltage * 10 + u64::from(b - b'0');
                 }
                 break;
             }
         }
 
-        total += num;
+        total += joltage;
     }
 
     total
