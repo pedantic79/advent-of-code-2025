@@ -1,42 +1,21 @@
 use aoc_runner_derive::{aoc, aoc_generator};
 
 #[aoc_generator(day3)]
-pub fn generator(input: &str) -> Vec<String> {
-    input.lines().map(|line| line.to_string()).collect()
+pub fn generator(input: &str) -> Vec<Vec<u8>> {
+    input.lines().map(|line| line.as_bytes().to_vec()).collect()
 }
 
-#[aoc(day3, part1)]
-pub fn part1(inputs: &[String]) -> usize {
-    let mut total = 0;
-    for input in inputs {
-        let mut max = usize::MIN;
-
-        for i in 0..input.len() {
-            for j in (i + 1)..input.len() {
-                let x = (input.as_bytes()[i] - b'0') * 10 + (input.as_bytes()[j] - b'0');
-                max = max.max(x as usize);
-            }
-        }
-
-        total += max;
-    }
-
-    total
-}
-
-#[aoc(day3, part2)]
-pub fn part2(inputs: &[String]) -> usize {
+fn solve<const N: usize>(lines: &[Vec<u8>]) -> u64 {
     let mut total = 0;
 
-    let mut digits = Vec::with_capacity(12);
+    let mut digits = Vec::with_capacity(N);
 
-    for line in inputs {
-        let line = line.as_bytes();
+    for line in lines {
         let mut idx = 0;
-        let mut num_skips = line.len() - 12;
+        let mut num_skips = line.len() - N;
         digits.clear();
 
-        while digits.len() < 12 {
+        while digits.len() < N {
             // we find the left-most maximum digit in the range of possible next digits
             // out of the possible number we can skip
 
@@ -58,10 +37,20 @@ pub fn part2(inputs: &[String]) -> usize {
 
         total += digits
             .iter()
-            .fold(0usize, |acc, &d| acc * 10 + (d - b'0') as usize);
+            .fold(0, |acc, &d| acc * 10 + u64::from(d - b'0'));
     }
 
     total
+}
+
+#[aoc(day3, part1)]
+pub fn part1(lines: &[Vec<u8>]) -> u64 {
+    solve::<2>(lines)
+}
+
+#[aoc(day3, part2)]
+pub fn part2(lines: &[Vec<u8>]) -> u64 {
+    solve::<12>(lines)
 }
 
 #[cfg(test)]
@@ -94,7 +83,7 @@ mod tests {
         use super::*;
 
         const INPUT: &str = include_str!("../input/2025/day3.txt");
-        const ANSWERS: (usize, usize) = (17613, 175304218462560);
+        const ANSWERS: (u64, u64) = (17613, 175304218462560);
 
         #[test]
         pub fn test() {
