@@ -3,72 +3,80 @@ use aoc_runner_derive::{aoc, aoc_generator};
 use crate::common::utils::neighbors_diag;
 
 #[aoc_generator(day4)]
-pub fn generator(input: &str) -> Vec<Vec<u8>> {
-    input.lines().map(|line| line.bytes().collect()).collect()
+pub fn generator(input: &str) -> (Vec<u8>, usize, usize) {
+    let height = input.lines().count();
+    let width = input.lines().next().unwrap().len();
+
+    let mut v = Vec::with_capacity(height * width);
+    for line in input.lines() {
+        v.extend(line.bytes());
+    }
+
+    (v, height, width)
+}
+
+fn neighbor_check(inputs: &[u8], r: usize, c: usize, r_max: usize, c_max: usize) -> bool {
+    neighbors_diag(r, c, r_max, c_max)
+        .filter(|&(nr, nc)| inputs[nr * c_max + nc] == b'@')
+        .count()
+        < 4
+}
+
+fn neighbor_check2(inputs: &[u8], r: usize, c: usize, r_max: usize, c_max: usize) -> bool {
+    neighbors_diag(r, c, r_max, c_max)
+        .filter(|&(nr, nc)| inputs[nr * c_max + nc] == b'@')
+        .try_fold(0, |acc, _| if acc + 1 >= 4 { None } else { Some(acc + 1) })
+        .is_some()
 }
 
 #[aoc(day4, part1)]
-pub fn part1(inputs: &[Vec<u8>]) -> usize {
-    let r_max = inputs.len();
-    let c_max = inputs[0].len();
-    inputs
-        .iter()
-        .enumerate()
-        .map(|(r, row)| {
-            row.iter()
-                .enumerate()
-                .filter(|&(c, &cell)| {
-                    if cell != b'@' {
-                        return false;
-                    }
-                    neighbors_diag(r, c, r_max, c_max)
-                        .filter(|&(nr, nc)| inputs[nr][nc] == b'@')
-                        .count()
-                        < 4
-                })
-                .count()
-        })
-        .sum()
+pub fn part1((inputs, r_max, c_max): &(Vec<u8>, usize, usize)) -> usize {
+    let mut sum = 0;
+    for r in 0..*r_max {
+        for c in 0..*c_max {
+            let idx = r * c_max + c;
+            if inputs[idx] != b'@' {
+                continue;
+            }
+
+            if neighbor_check2(inputs, r, c, *r_max, *c_max) {
+                sum += 1;
+            }
+        }
+    }
+    sum
 }
 
 #[aoc(day4, part2)]
-pub fn part2(inputs: &[Vec<u8>]) -> usize {
-    let r_max = inputs.len();
-    let c_max = inputs[0].len();
-
+pub fn part2((inputs, r_max, c_max): &(Vec<u8>, usize, usize)) -> usize {
     let mut count = 0;
     let mut inputs = inputs.to_vec();
+    let mut to_remove = Vec::with_capacity(2048);
 
     loop {
-        let mut to_remove = Vec::new();
-
-        for r in 0..r_max {
-            for c in 0..c_max {
-                if inputs[r][c] != b'@' {
+        for r in 0..*r_max {
+            for c in 0..*c_max {
+                let idx = r * c_max + c;
+                if inputs[idx] != b'@' {
                     continue;
                 }
 
-                let neighbor_count = neighbors_diag(r, c, r_max, c_max)
-                    .filter(|&(nr, nc)| inputs[nr][nc] == b'@')
-                    .count();
-
-                if neighbor_count < 4 {
-                    to_remove.push((c, r));
+                if neighbor_check(&inputs, r, c, *r_max, *c_max) {
+                    to_remove.push(idx);
                 }
             }
         }
 
         count += to_remove.len();
         if to_remove.is_empty() {
-            break;
+            break count;
         }
 
-        for (c, r) in to_remove {
-            inputs[r][c] = b'.';
+        for &idx in &to_remove {
+            inputs[idx] = b'.';
         }
+        to_remove.clear();
     }
-
-    count
 }
 
 #[cfg(test)]
