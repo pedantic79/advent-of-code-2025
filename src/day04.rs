@@ -7,26 +7,16 @@ pub fn generator(input: &str) -> (Vec<u8>, usize, usize) {
     let height = input.lines().count();
     let width = input.lines().next().unwrap().len();
 
-    let mut v = Vec::with_capacity(height * width);
-    for line in input.lines() {
-        v.extend(line.bytes());
-    }
-
+    let mut v = input.as_bytes().to_vec();
+    v.push(b'\n');
     (v, height, width)
 }
 
 fn neighbor_check(inputs: &[u8], r: usize, c: usize, r_max: usize, c_max: usize) -> bool {
     neighbors_diag(r, c, r_max, c_max)
-        .filter(|&(nr, nc)| inputs[nr * c_max + nc] == b'@')
+        .filter(|&(nr, nc)| inputs[nr * (c_max + 1) + nc] == b'@')
         .count()
         < 4
-}
-
-fn neighbor_check2(inputs: &[u8], r: usize, c: usize, r_max: usize, c_max: usize) -> bool {
-    neighbors_diag(r, c, r_max, c_max)
-        .filter(|&(nr, nc)| inputs[nr * c_max + nc] == b'@')
-        .try_fold(0, |acc, _| if acc + 1 >= 4 { None } else { Some(acc + 1) })
-        .is_some()
 }
 
 #[aoc(day4, part1)]
@@ -34,12 +24,12 @@ pub fn part1((inputs, r_max, c_max): &(Vec<u8>, usize, usize)) -> usize {
     let mut sum = 0;
     for r in 0..*r_max {
         for c in 0..*c_max {
-            let idx = r * c_max + c;
+            let idx = r * (c_max + 1) + c;
             if inputs[idx] != b'@' {
                 continue;
             }
 
-            if neighbor_check2(inputs, r, c, *r_max, *c_max) {
+            if neighbor_check(inputs, r, c, *r_max, *c_max) {
                 sum += 1;
             }
         }
@@ -56,7 +46,7 @@ pub fn part2((inputs, r_max, c_max): &(Vec<u8>, usize, usize)) -> usize {
     loop {
         for r in 0..*r_max {
             for c in 0..*c_max {
-                let idx = r * c_max + c;
+                let idx = r * (c_max + 1) + c;
                 if inputs[idx] != b'@' {
                     continue;
                 }
