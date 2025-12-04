@@ -73,6 +73,35 @@ pub fn part2(lines: &[Vec<u8>]) -> u64 {
     solve::<12>(lines)
 }
 
+#[aoc(day3, part2, stack)]
+pub fn part2_stack(lines: &[Vec<u8>]) -> u64 {
+    const N: usize = 12;
+    let mut total = 0;
+    let mut stack = Vec::with_capacity(N);
+
+    for digits in lines {
+        let len = digits.len();
+
+        for (i, &d) in digits.iter().enumerate() {
+            // while we can pop and replacing gives a better (bigger) result
+            while !stack.is_empty() && stack.len() + (len - i) > N && stack.last().unwrap() < &d {
+                stack.pop();
+            }
+
+            if stack.len() < N {
+                stack.push(d);
+            }
+        }
+
+        total += stack
+            .iter()
+            .fold(0u64, |acc, &b| acc * 10 + u64::from(b - b'0'));
+        stack.clear();
+    }
+
+    total
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
