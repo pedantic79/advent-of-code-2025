@@ -1,90 +1,94 @@
 use aoc_runner_derive::{aoc, aoc_generator};
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Object {
-    ranges: Vec<(u64, u64)>,
+pub struct IngredientInfo {
+    ranges: Vec<Range>,
     ids: Vec<u64>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct Range {
+    start: u64,
+    end: u64,
+}
+
 #[aoc_generator(day5)]
-pub fn generator(input: &str) -> Object {
+pub fn generator(input: &str) -> IngredientInfo {
     let (top, bottom) = input.split_once("\n\n").unwrap();
-    let ranges = top
+    let ranges: Vec<_> = top
         .lines()
         .map(|line| {
             let (start, end) = line.split_once('-').unwrap();
-            (start.parse().unwrap(), end.parse().unwrap())
+            Range {
+                start: start.parse().unwrap(),
+                end: end.parse().unwrap(),
+            }
         })
         .collect();
 
     let ids = bottom.lines().map(|line| line.parse().unwrap()).collect();
-    Object { ranges, ids }
+
+    IngredientInfo {
+        ranges: find_non_overlapping_ranges(&ranges),
+        ids,
+    }
 }
 
 #[aoc(day5, part1)]
-pub fn part1(inputs: &Object) -> usize {
-    let mut count = 0;
-    for id in &inputs.ids {
-        count += usize::from(
+pub fn part1(inputs: &IngredientInfo) -> usize {
+    inputs
+        .ids
+        .iter()
+        .filter(|&id| {
             inputs
                 .ranges
                 .iter()
-                .any(|(start, end)| id >= start && id <= end),
-        )
-    }
-    count
+                .any(|Range { start, end }| id >= start && id <= end)
+        })
+        .count()
 }
 
-fn merge_overlapping_ranges(
-    a_start: u64,
-    a_end: u64,
-    b_start: u64,
-    b_end: u64,
-) -> Option<(u64, u64)> {
-    if a_end < b_start || b_end < a_start {
+fn merge_overlapping_ranges(a: Range, b: Range) -> Option<Range> {
+    if a.end < b.start || b.end < a.start {
         return None;
     }
 
-    Some((a_start.min(b_start), a_end.max(b_end)))
+    Some(Range {
+        start: a.start.min(b.start),
+        end: a.end.max(b.end),
+    })
 }
 
-fn find_non_overlapping_ranges(ranges: &[(u64, u64)]) -> Vec<(u64, u64)> {
-    let mut non_overlapping_ranges: Vec<(u64, u64)> = Vec::with_capacity(ranges.len());
+fn find_non_overlapping_ranges(ranges: &[Range]) -> Vec<Range> {
+    let mut non_overlapping_ranges: Vec<Range> = Vec::with_capacity(ranges.len());
 
     // Iterate through each range and try to merge it with existing non-overlapping ranges
-    for (start, end) in ranges {
-        let mut current_start = *start;
-        let mut current_end = *end;
-
+    for current in ranges {
+        let mut current = *current;
         let mut i = 0;
+
         while i < non_overlapping_ranges.len() {
-            if let Some((new_start, new_end)) = merge_overlapping_ranges(
-                current_start,
-                current_end,
-                non_overlapping_ranges[i].0,
-                non_overlapping_ranges[i].1,
-            ) {
-                current_start = new_start;
-                current_end = new_end;
+            // Try to merge current with non_overlapping_ranges[i]
+            if let Some(merged) = merge_overlapping_ranges(current, non_overlapping_ranges[i]) {
+                current = merged;
                 non_overlapping_ranges.swap_remove(i);
             } else {
                 i += 1;
             }
         }
 
-        non_overlapping_ranges.push((current_start, current_end));
+        non_overlapping_ranges.push(current);
     }
 
     non_overlapping_ranges
 }
 
 #[aoc(day5, part2)]
-pub fn part2(inputs: &Object) -> u64 {
-    let non_overlapping_ranges = find_non_overlapping_ranges(&inputs.ranges);
-
-    non_overlapping_ranges
+pub fn part2(inputs: &IngredientInfo) -> u64 {
+    inputs
+        .ranges
         .iter()
-        .map(|(start, end)| end - start + 1)
+        .map(|range| range.end - range.start + 1)
         .sum()
 }
 
