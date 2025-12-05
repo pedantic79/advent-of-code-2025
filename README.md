@@ -8,6 +8,8 @@
   - [solution](src/day03.rs)
 - [Day 4: Printing Department](https://adventofcode.com/2025/day/4)
   - [solution](src/day04.rs)
+- [Day 5: Cafeteria](https://adventofcode.com/2025/day/5)
+  - [solution](src/day05.rs)
 <!-- Insert before -->
 
 See:
