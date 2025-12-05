@@ -15,6 +15,19 @@ pub struct Range {
     end: u64,
 }
 
+impl Range {
+    fn merge_overlapping(&self, b: Self) -> Option<Self> {
+        if self.end < b.start || b.end < self.start {
+            return None;
+        }
+
+        Some(Self {
+            start: self.start.min(b.start),
+            end: self.end.max(b.end),
+        })
+    }
+}
+
 fn parse_range(s: &str) -> IResult<&str, Range> {
     let (s, start) = nom_u64(s)?;
     let (s, _) = tag("-").parse(s)?;
@@ -35,7 +48,7 @@ pub fn generator(input: &str) -> IngredientInfo {
     let (ranges, ids) = all_consuming(parse_input).parse(input).unwrap().1;
 
     IngredientInfo {
-        ranges: find_non_overlapping_ranges(&ranges),
+        ranges: find_disjoint_ranges(&ranges),
         ids,
     }
 }
@@ -54,40 +67,29 @@ pub fn part1(inputs: &IngredientInfo) -> usize {
         .count()
 }
 
-fn merge_overlapping_ranges(a: Range, b: Range) -> Option<Range> {
-    if a.end < b.start || b.end < a.start {
-        return None;
-    }
-
-    Some(Range {
-        start: a.start.min(b.start),
-        end: a.end.max(b.end),
-    })
-}
-
-fn find_non_overlapping_ranges(ranges: &[Range]) -> Vec<Range> {
-    let mut non_overlapping_ranges: Vec<Range> = Vec::with_capacity(ranges.len());
+fn find_disjoint_ranges(ranges: &[Range]) -> Vec<Range> {
+    let mut disjoint_ranges = Vec::with_capacity(ranges.len());
 
     // Iterate through each range and try to merge it with existing non-overlapping ranges
     for current in ranges {
         let mut current = *current;
         let mut i = 0;
 
-        while i < non_overlapping_ranges.len() {
-            if let Some(merged) = merge_overlapping_ranges(current, non_overlapping_ranges[i]) {
+        while i < disjoint_ranges.len() {
+            if let Some(merged) = current.merge_overlapping(disjoint_ranges[i]) {
                 // If they overlap, update current to the merged range and remove the existing range
                 current = merged;
-                non_overlapping_ranges.swap_remove(i);
+                disjoint_ranges.swap_remove(i);
             } else {
                 i += 1;
             }
         }
 
         // After attempting to merge with all existing ranges, add the (possibly merged) current range
-        non_overlapping_ranges.push(current);
+        disjoint_ranges.push(current);
     }
 
-    non_overlapping_ranges
+    disjoint_ranges
 }
 
 #[aoc(day5, part2)]
