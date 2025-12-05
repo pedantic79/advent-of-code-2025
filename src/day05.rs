@@ -48,7 +48,7 @@ pub fn generator(input: &str) -> IngredientInfo {
     let (ranges, ids) = all_consuming(parse_input).parse(input).unwrap().1;
 
     IngredientInfo {
-        ranges: find_disjoint_ranges(&ranges),
+        ranges: merge_ranges(ranges),
         ids,
     }
 }
@@ -67,26 +67,24 @@ pub fn part1(inputs: &IngredientInfo) -> usize {
         .count()
 }
 
-fn find_disjoint_ranges(ranges: &[Range]) -> Vec<Range> {
+fn merge_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
+    // We require sorted ranges to make merging easier
+    ranges.sort_unstable_by_key(|r| r.start);
+
     let mut disjoint_ranges = Vec::with_capacity(ranges.len());
+    disjoint_ranges.push(ranges[0]);
 
-    // Iterate through each range and try to merge it with existing non-overlapping ranges
-    for current in ranges {
-        let mut current = *current;
-        let mut i = 0;
+    for current in ranges[1..].iter().copied() {
+        // We only need to check the last range in disjoint_ranges for overlap
+        let last = disjoint_ranges.last_mut().unwrap();
 
-        while i < disjoint_ranges.len() {
-            if let Some(merged) = current.merge_overlapping(disjoint_ranges[i]) {
-                // If they overlap, update current to the merged range and remove the existing range
-                current = merged;
-                disjoint_ranges.swap_remove(i);
-            } else {
-                i += 1;
-            }
+        if let Some(merged_range) = last.merge_overlapping(current) {
+            *last = merged_range;
+        } else {
+            // No overlap, simply add the current range to the end of disjoint_ranges
+            // next time through, we will be comparing against this one
+            disjoint_ranges.push(current);
         }
-
-        // After attempting to merge with all existing ranges, add the (possibly merged) current range
-        disjoint_ranges.push(current);
     }
 
     disjoint_ranges
