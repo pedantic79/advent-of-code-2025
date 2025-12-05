@@ -1,4 +1,7 @@
 use aoc_runner_derive::{aoc, aoc_generator};
+use nom::{IResult, Parser, bytes::complete::tag, combinator::all_consuming};
+
+use crate::common::nom::{nom_lines, nom_u64};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct IngredientInfo {
@@ -12,21 +15,24 @@ pub struct Range {
     end: u64,
 }
 
+fn parse_range(s: &str) -> IResult<&str, Range> {
+    let (s, start) = nom_u64(s)?;
+    let (s, _) = tag("-").parse(s)?;
+    let (s, end) = nom_u64(s)?;
+    Ok((s, Range { start, end }))
+}
+
+fn parse_input(s: &str) -> IResult<&str, (Vec<Range>, Vec<u64>)> {
+    let (s, ranges) = nom_lines(parse_range).parse(s)?;
+    let (s, _) = tag("\n\n").parse(s)?;
+    let (s, ids) = nom_lines(nom_u64).parse(s)?;
+
+    Ok((s, (ranges, ids)))
+}
+
 #[aoc_generator(day5)]
 pub fn generator(input: &str) -> IngredientInfo {
-    let (top, bottom) = input.split_once("\n\n").unwrap();
-    let ranges: Vec<_> = top
-        .lines()
-        .map(|line| {
-            let (start, end) = line.split_once('-').unwrap();
-            Range {
-                start: start.parse().unwrap(),
-                end: end.parse().unwrap(),
-            }
-        })
-        .collect();
-
-    let ids = bottom.lines().map(|line| line.parse().unwrap()).collect();
+    let (ranges, ids) = all_consuming(parse_input).parse(input).unwrap().1;
 
     IngredientInfo {
         ranges: find_non_overlapping_ranges(&ranges),
@@ -68,8 +74,8 @@ fn find_non_overlapping_ranges(ranges: &[Range]) -> Vec<Range> {
         let mut i = 0;
 
         while i < non_overlapping_ranges.len() {
-            // Try to merge current with non_overlapping_ranges[i]
             if let Some(merged) = merge_overlapping_ranges(current, non_overlapping_ranges[i]) {
+                // If they overlap, update current to the merged range and remove the existing range
                 current = merged;
                 non_overlapping_ranges.swap_remove(i);
             } else {
@@ -77,6 +83,7 @@ fn find_non_overlapping_ranges(ranges: &[Range]) -> Vec<Range> {
             }
         }
 
+        // After attempting to merge with all existing ranges, add the (possibly merged) current range
         non_overlapping_ranges.push(current);
     }
 
