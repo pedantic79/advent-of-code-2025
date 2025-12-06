@@ -1,7 +1,8 @@
 use aoc_runner_derive::{aoc, aoc_generator};
+use arrayvec::ArrayVec;
 
 #[aoc_generator(day6, part1)]
-pub fn generator_p1(input: &str) -> (Vec<Vec<u64>>, Vec<u8>) {
+pub fn generator_p1(input: &str) -> (ArrayVec<Vec<u64>, 4>, Vec<u8>) {
     let mut iter = input.lines().rev();
 
     let ops = iter
@@ -11,13 +12,13 @@ pub fn generator_p1(input: &str) -> (Vec<Vec<u64>>, Vec<u8>) {
         .filter(|&b| b != b' ')
         .collect::<Vec<u8>>();
 
-    let mut output: Vec<Vec<u64>> = Vec::new();
+    let mut output = ArrayVec::new();
     for line in iter {
         let nums = line
             .split(' ')
             .filter(|s| !s.is_empty())
             .map(|s| s.parse::<u64>().unwrap())
-            .collect::<Vec<u64>>();
+            .collect::<Vec<_>>();
 
         output.push(nums);
     }
@@ -26,22 +27,25 @@ pub fn generator_p1(input: &str) -> (Vec<Vec<u64>>, Vec<u8>) {
 }
 
 #[aoc_generator(day6, part2)]
-pub fn generator_p2(input: &str) -> (Vec<Vec<u64>>, Vec<u8>) {
+pub fn generator_p2(input: &str) -> (Vec<ArrayVec<u64, 4>>, Vec<u8>) {
     let lines = input.lines().collect::<Vec<&str>>();
     let lines_len = lines.len();
 
     debug_assert!(lines.iter().all(|&line| line.len() == lines[0].len()));
     let mut output = Vec::new();
     let mut ops = Vec::new();
-    let mut group = Vec::new();
+    let mut group = ArrayVec::new();
 
     for col in (0..lines[0].len()).rev() {
-        let num = lines[..(lines_len - 1)]
-            .iter()
-            .map(|&line| line.as_bytes()[col] as char)
-            .collect::<String>();
+        let mut ss = [b' '; 4];
 
-        let n_trimmed = num.trim();
+        for (line_num, line) in lines[..(lines_len - 1)].iter().enumerate() {
+            ss[line_num] = line.as_bytes()[col];
+        }
+        // SAFETY: Input is only ASCII digits and spaces
+        let ss = unsafe { std::str::from_utf8_unchecked(&ss) };
+
+        let n_trimmed = ss.trim();
         if !n_trimmed.is_empty() {
             group.push(n_trimmed.parse::<u64>().unwrap());
         }
@@ -51,7 +55,7 @@ pub fn generator_p2(input: &str) -> (Vec<Vec<u64>>, Vec<u8>) {
             // process group
             output.push(group);
             ops.push(op);
-            group = Vec::new();
+            group = ArrayVec::new();
         }
     }
 
@@ -59,7 +63,7 @@ pub fn generator_p2(input: &str) -> (Vec<Vec<u64>>, Vec<u8>) {
 }
 
 #[aoc(day6, part1)]
-pub fn part1((nums, ops): &(Vec<Vec<u64>>, Vec<u8>)) -> u64 {
+pub fn part1((nums, ops): &(ArrayVec<Vec<u64>, 4>, Vec<u8>)) -> u64 {
     let mut total = 0;
 
     for (i, op) in ops.iter().enumerate() {
@@ -78,7 +82,7 @@ pub fn part1((nums, ops): &(Vec<Vec<u64>>, Vec<u8>)) -> u64 {
 }
 
 #[aoc(day6, part2)]
-pub fn part2((nums, ops): &(Vec<Vec<u64>>, Vec<u8>)) -> u64 {
+pub fn part2((nums, ops): &(Vec<ArrayVec<u64, 4>>, Vec<u8>)) -> u64 {
     let mut total = 0;
 
     for (op, group) in ops.iter().zip(nums.iter()) {
