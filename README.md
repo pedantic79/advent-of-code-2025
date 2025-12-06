@@ -10,6 +10,8 @@
   - [solution](src/day04.rs)
 - [Day 5: Cafeteria](https://adventofcode.com/2025/day/5)
   - [solution](src/day05.rs)
+- [Day 6: Trash Compactor](https://adventofcode.com/2025/day/6)
+  - [solution](src/day06.rs)
 <!-- Insert before -->
 
 See:
