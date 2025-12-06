@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use aoc_runner_derive::{aoc, aoc_generator};
+use arrayvec::ArrayVec;
 
 fn parse_op_with_ranges(chunk: &str) -> (Vec<u8>, Vec<Range<usize>>) {
     let mut ops = Vec::new();
@@ -30,12 +31,12 @@ fn parse_op_with_ranges(chunk: &str) -> (Vec<u8>, Vec<Range<usize>>) {
 }
 
 #[aoc_generator(day6)]
-pub fn generator(input: &str) -> (Vec<Vec<[u8; 4]>>, Vec<u8>) {
+pub fn generator(input: &str) -> (Vec<ArrayVec<[u8; 4], 4>>, Vec<u8>) {
     let mut iter = input.lines().rev();
     let (ops, ranges) = parse_op_with_ranges(iter.next().unwrap());
 
     let columns = ops.len();
-    let mut nums = vec![vec![]; columns];
+    let mut nums = vec![ArrayVec::new(); columns];
 
     for line in iter {
         let bytes = line.as_bytes();
@@ -56,7 +57,7 @@ pub fn generator(input: &str) -> (Vec<Vec<[u8; 4]>>, Vec<u8>) {
 }
 
 #[aoc(day6, part1)]
-pub fn part1((nums, ops): &(Vec<Vec<[u8; 4]>>, Vec<u8>)) -> u64 {
+pub fn part1((nums, ops): &(Vec<ArrayVec<[u8; 4], 4>>, Vec<u8>)) -> u64 {
     let mut total = 0;
 
     for (col_nums, op) in nums.iter().zip(ops.iter()) {
@@ -82,17 +83,9 @@ fn rotate_numbers(nums: &[[u8; 4]]) -> Vec<u64> {
     for amount in 0..4 {
         let n = nums
             .iter()
-            .filter_map(|n| {
-                let n = n[amount];
-
-                if n == b' ' {
-                    None
-                } else {
-                    Some(u64::from(n - b'0'))
-                }
-            })
+            .filter_map(|n| Some(n[amount]).filter(|&c| c != b' '))
             .rev()
-            .fold(0, |acc, d| acc * 10 + d);
+            .fold(0, |acc, d| acc * 10 + (u64::from(d - b'0')));
 
         if n != 0 {
             res.push(n);
@@ -103,7 +96,7 @@ fn rotate_numbers(nums: &[[u8; 4]]) -> Vec<u64> {
 }
 
 #[aoc(day6, part2)]
-pub fn part2((nums, ops): &(Vec<Vec<[u8; 4]>>, Vec<u8>)) -> u64 {
+pub fn part2((nums, ops): &(Vec<ArrayVec<[u8; 4], 4>>, Vec<u8>)) -> u64 {
     let mut total = 0;
     for (num_col, op) in nums.iter().zip(ops.iter()) {
         let rotated = rotate_numbers(num_col);
