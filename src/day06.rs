@@ -25,12 +25,7 @@ fn parse_op_with_ranges(chunk: &str) -> (Vec<u8>, Vec<Range<usize>>) {
 
     ranges.push(start..bytes.len());
 
-    if in_op {
-        ops.push(bytes[start]);
-    }
-
-    assert_eq!(ops.len(), ranges.len());
-
+    debug_assert_eq!(ops.len(), ranges.len());
     (ops, ranges)
 }
 
@@ -64,27 +59,15 @@ pub fn generator(input: &str) -> (Vec<Vec<[u8; 4]>>, Vec<u8>) {
 pub fn part1((nums, ops): &(Vec<Vec<[u8; 4]>>, Vec<u8>)) -> u64 {
     let mut total = 0;
 
-    for (col, col_nums) in nums.iter().enumerate() {
-        let op = ops[col];
-        let col_total = match op {
-            b'+' => col_nums
-                .iter()
-                .map(|x| {
-                    let s = unsafe { str::from_utf8_unchecked(x) }.trim();
+    for (col_nums, op) in nums.iter().zip(ops.iter()) {
+        let iter = col_nums.iter().map(|x| {
+            let s = unsafe { str::from_utf8_unchecked(x) }.trim();
+            s.parse::<u64>().unwrap()
+        });
 
-                    // eprintln!("Parsing for sum: '{}'", s);
-                    s.parse::<u64>().unwrap()
-                })
-                .sum::<u64>(),
-            b'*' => col_nums
-                .iter()
-                .map(|x| {
-                    let s = unsafe { str::from_utf8_unchecked(x) }.trim();
-
-                    // eprintln!("Parsing for mul: '{}'", s);
-                    s.parse::<u64>().unwrap()
-                })
-                .product(),
+        let col_total: u64 = match op {
+            b'+' => iter.sum(),
+            b'*' => iter.product(),
             _ => panic!("Unknown operation"),
         };
         total += col_total;
@@ -99,16 +82,21 @@ fn rotate_numbers(nums: &[[u8; 4]]) -> Vec<u64> {
     for amount in 0..4 {
         let n = nums
             .iter()
-            .map(|&n| n[amount])
-            .map(|n| if n == b' ' { 0 } else { (n - b'0') as u64 })
-            .filter(|&d| d != 0)
+            .filter_map(|n| {
+                let n = n[amount];
+
+                if n == b' ' {
+                    None
+                } else {
+                    Some(u64::from(n - b'0'))
+                }
+            })
             .rev()
             .fold(0, |acc, d| acc * 10 + d);
 
-        if n == 0 {
-            continue;
+        if n != 0 {
+            res.push(n);
         }
-        res.push(n);
     }
 
     res
@@ -125,10 +113,6 @@ pub fn part2((nums, ops): &(Vec<Vec<[u8; 4]>>, Vec<u8>)) -> u64 {
             b'*' => rotated.iter().product(),
             _ => panic!("Unknown operation"),
         };
-        // eprintln!(
-        //     "Rotated: {:?}, op: {}, col_total: {}",
-        //     rotated, *op as char, col_total
-        // );
         total += col_total;
     }
 
