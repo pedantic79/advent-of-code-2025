@@ -1,119 +1,94 @@
-use std::ops::Range;
-
 use aoc_runner_derive::{aoc, aoc_generator};
 
-fn parse_op_with_ranges(chunk: &str) -> (Vec<u8>, Vec<Range<usize>>) {
-    let mut ops = Vec::new();
-    let mut ranges = Vec::new();
+#[aoc_generator(day6, part1)]
+pub fn generator_p1(input: &str) -> (Vec<Vec<u64>>, Vec<u8>) {
+    let mut iter = input.lines().rev();
 
-    let bytes = chunk.as_bytes();
-    let mut start = 0;
-    let mut in_op = false;
+    let ops = iter
+        .next()
+        .unwrap()
+        .bytes()
+        .filter(|&b| b != b' ')
+        .collect::<Vec<u8>>();
 
-    for (i, &b) in bytes.iter().enumerate() {
-        if b != b' ' && !in_op {
-            in_op = true;
-            if i != 0 {
-                ranges.push(start..(i - 1));
-            }
-            start = i;
-        } else if b == b' ' && in_op {
-            in_op = false;
-            ops.push(bytes[start]);
-        }
+    let mut output: Vec<Vec<u64>> = Vec::new();
+    for line in iter {
+        let nums = line
+            .split(' ')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.parse::<u64>().unwrap())
+            .collect::<Vec<u64>>();
+
+        output.push(nums);
     }
 
-    ranges.push(start..bytes.len());
-
-    debug_assert_eq!(ops.len(), ranges.len());
-    (ops, ranges)
+    (output, ops)
 }
 
-#[aoc_generator(day6)]
-pub fn generator(input: &str) -> (Vec<Vec<[u8; 4]>>, Vec<u8>) {
-    let mut iter = input.lines().rev();
-    let (ops, ranges) = parse_op_with_ranges(iter.next().unwrap());
+#[aoc_generator(day6, part2)]
+pub fn generator_p2(input: &str) -> (Vec<Vec<u64>>, Vec<u8>) {
+    let lines = input.lines().collect::<Vec<&str>>();
+    let lines_len = lines.len();
 
-    let columns = ops.len();
-    let mut nums = vec![vec![]; columns];
+    debug_assert!(lines.iter().all(|&line| line.len() == lines[0].len()));
+    let mut output = Vec::new();
+    let mut ops = Vec::new();
+    let mut group = Vec::new();
 
-    for line in iter {
-        let bytes = line.as_bytes();
+    for col in (0..lines[0].len()).rev() {
+        let num = lines[..(lines_len - 1)]
+            .iter()
+            .map(|&line| line.as_bytes()[col] as char)
+            .collect::<String>();
 
-        for (col, range) in ranges.iter().enumerate() {
-            let slice = &bytes[range.clone()];
+        let n_trimmed = num.trim();
+        if !n_trimmed.is_empty() {
+            group.push(n_trimmed.parse::<u64>().unwrap());
+        }
 
-            nums[col].push([
-                slice.first().copied().unwrap_or(b' '),
-                slice.get(1).copied().unwrap_or(b' '),
-                slice.get(2).copied().unwrap_or(b' '),
-                slice.get(3).copied().unwrap_or(b' '),
-            ]);
+        let op = lines.last().unwrap().as_bytes()[col];
+        if op == b'*' || op == b'+' {
+            // process group
+            output.push(group);
+            ops.push(op);
+            group = Vec::new();
         }
     }
 
-    (nums, ops)
+    (output, ops)
 }
 
 #[aoc(day6, part1)]
-pub fn part1((nums, ops): &(Vec<Vec<[u8; 4]>>, Vec<u8>)) -> u64 {
+pub fn part1((nums, ops): &(Vec<Vec<u64>>, Vec<u8>)) -> u64 {
     let mut total = 0;
 
-    for (col_nums, op) in nums.iter().zip(ops.iter()) {
-        let iter = col_nums.iter().map(|x| {
-            let s = unsafe { str::from_utf8_unchecked(x) }.trim();
-            s.parse::<u64>().unwrap()
-        });
+    for (i, op) in ops.iter().enumerate() {
+        let column = nums.iter().map(|row| row[i]);
 
-        let col_total: u64 = match op {
-            b'+' => iter.sum(),
-            b'*' => iter.product(),
-            _ => panic!("Unknown operation"),
+        let column_total: u64 = match op {
+            b'+' => column.sum(),
+            b'*' => column.product(),
+            _ => panic!("Unknown operator {}", *op as char),
         };
-        total += col_total;
+
+        total += column_total;
     }
 
     total
 }
 
-fn rotate_numbers(nums: &[[u8; 4]]) -> Vec<u64> {
-    let mut res = Vec::new();
-
-    for amount in 0..4 {
-        let n = nums
-            .iter()
-            .filter_map(|n| {
-                let n = n[amount];
-
-                if n == b' ' {
-                    None
-                } else {
-                    Some(u64::from(n - b'0'))
-                }
-            })
-            .rev()
-            .fold(0, |acc, d| acc * 10 + d);
-
-        if n != 0 {
-            res.push(n);
-        }
-    }
-
-    res
-}
-
 #[aoc(day6, part2)]
-pub fn part2((nums, ops): &(Vec<Vec<[u8; 4]>>, Vec<u8>)) -> u64 {
+pub fn part2((nums, ops): &(Vec<Vec<u64>>, Vec<u8>)) -> u64 {
     let mut total = 0;
-    for (num_col, op) in nums.iter().zip(ops.iter()) {
-        let rotated = rotate_numbers(num_col);
 
-        let col_total: u64 = match op {
-            b'+' => rotated.iter().sum(),
-            b'*' => rotated.iter().product(),
-            _ => panic!("Unknown operation"),
+    for (op, group) in ops.iter().zip(nums.iter()) {
+        let group_total: u64 = match op {
+            b'+' => group.iter().sum(),
+            b'*' => group.iter().product(),
+            _ => panic!("Unknown operator {}", *op as char),
         };
-        total += col_total;
+
+        total += group_total;
     }
 
     total
@@ -128,27 +103,20 @@ mod tests {
 
     #[test]
     pub fn input_test() {
-        println!("{:?}", generator(SAMPLE));
+        println!("{:?}", generator_p1(SAMPLE));
+        println!("{:?}", generator_p2(SAMPLE));
 
         // assert_eq!(generator(SAMPLE), Object());
     }
 
     #[test]
     pub fn part1_test() {
-        assert_eq!(part1(&generator(SAMPLE)), 4277556);
-    }
-
-    #[test]
-    pub fn rotate_numbers_test() {
-        assert_eq!(
-            rotate_numbers(&[*b"  6 ", *b" 45 ", *b"123 "]),
-            vec![1, 24, 356]
-        );
+        assert_eq!(part1(&generator_p1(SAMPLE)), 4277556);
     }
 
     #[test]
     pub fn part2_test() {
-        assert_eq!(part2(&generator(SAMPLE)), 3263827);
+        assert_eq!(part2(&generator_p2(SAMPLE)), 3263827);
     }
 
     mod regression {
@@ -160,10 +128,11 @@ mod tests {
         #[test]
         pub fn test() {
             let input = INPUT.trim_end_matches('\n');
-            let output = generator(input);
+            let output_p1 = generator_p1(input);
+            let output_p2 = generator_p2(input);
 
-            assert_eq!(part1(&output), ANSWERS.0);
-            assert_eq!(part2(&output), ANSWERS.1);
+            assert_eq!(part1(&output_p1), ANSWERS.0);
+            assert_eq!(part2(&output_p2), ANSWERS.1);
         }
     }
 }
