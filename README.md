@@ -12,6 +12,8 @@
   - [solution](src/day05.rs)
 - [Day 6: Trash Compactor](https://adventofcode.com/2025/day/6)
   - [solution](src/day06.rs)
+- [Day 7: Laboratories](https://adventofcode.com/2025/day/7)
+  - [solution](src/day07.rs)
 <!-- Insert before -->
 
 See:
