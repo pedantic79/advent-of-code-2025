@@ -1,5 +1,8 @@
 use aoc_runner_derive::{aoc, aoc_generator};
 
+// We process every other row because those are the rows with splitters
+const ROW_STEP: usize = 2;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Map {
     data: Vec<u8>,
@@ -22,14 +25,16 @@ pub fn generator(input: &str) -> Map {
 
 #[aoc(day7, part1)]
 pub fn part1(map: &Map) -> usize {
+    let mut count: usize = 0;
     let mut beams = Vec::with_capacity(map.width);
     let mut new_beams = Vec::with_capacity(map.width);
     new_beams.push(map.width / 2);
-    let mut count = 0;
 
-    for row in 1..map.height {
+    for row in (ROW_STEP..map.height).step_by(ROW_STEP) {
         std::mem::swap(&mut beams, &mut new_beams);
         new_beams.clear();
+
+        // This is faster than using a HashSet
         beams.sort_unstable();
         beams.dedup();
 
@@ -58,7 +63,7 @@ fn num_worlds(col: usize, row: usize, map: &Map, memo: &mut Vec<usize>) -> usize
         return x;
     }
 
-    let row = row + 1;
+    let row = row + ROW_STEP;
     let count = if map.data[index] == b'^' {
         num_worlds(col + 1, row, map, memo) + num_worlds(col - 1, row, map, memo)
     } else {
@@ -71,7 +76,7 @@ fn num_worlds(col: usize, row: usize, map: &Map, memo: &mut Vec<usize>) -> usize
 
 #[aoc(day7, part2)]
 pub fn part2(map: &Map) -> usize {
-    num_worlds(map.width / 2, 1, map, &mut vec![0; map.data.len()])
+    num_worlds(map.width / 2, ROW_STEP, map, &mut vec![0; map.data.len()])
 }
 
 #[cfg(test)]
