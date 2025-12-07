@@ -1,4 +1,6 @@
 use aoc_runner_derive::{aoc, aoc_generator};
+use arrayvec::ArrayVec;
+use pathfinding::prelude::{bfs_reach, count_paths};
 
 // We process every other row because those are the rows with splitters
 const ROW_STEP: usize = 2;
@@ -25,58 +27,49 @@ pub fn generator(input: &str) -> Map {
 
 #[aoc(day7, part1)]
 pub fn part1(map: &Map) -> usize {
-    let mut count: usize = 0;
-    let mut beams = Vec::with_capacity(map.width);
-    let mut new_beams = Vec::with_capacity(map.width);
-    new_beams.push(map.width / 2);
+    // BFS to find all reachable '^' from the starting point
+    bfs_reach((ROW_STEP, map.width / 2), |&(row, col)| {
+        let mut v = ArrayVec::<_, 2>::new();
 
-    for row in (ROW_STEP..map.height).step_by(ROW_STEP) {
-        std::mem::swap(&mut beams, &mut new_beams);
-        new_beams.clear();
-
-        // This is faster than using a HashSet
-        beams.sort_unstable();
-        beams.dedup();
-
-        for &beam in beams.iter() {
-            if map.data[(map.width + 1) * row + beam] == b'^' {
-                new_beams.push(beam + 1);
-                new_beams.push(beam - 1);
-                count += 1;
-            } else {
-                new_beams.push(beam);
+        for new_col in [col - 1, col + 1] {
+            // search downwards for the next '^' in this column
+            for r in (row + ROW_STEP..=map.height).step_by(ROW_STEP) {
+                if map
+                    .data
+                    .get((map.width + 1) * r + new_col)
+                    .copied()
+                    .unwrap_or(b' ')
+                    == b'^'
+                {
+                    v.push((r, new_col));
+                    break;
+                }
             }
         }
-    }
 
-    count
-}
-
-fn num_worlds(col: usize, row: usize, map: &Map, memo: &mut Vec<usize>) -> usize {
-    if row >= map.height {
-        return 1;
-    }
-
-    let index = row * (map.width + 1) + col;
-    let x = memo[index];
-    if x > 0 {
-        return x;
-    }
-
-    let row = row + ROW_STEP;
-    let count = if map.data[index] == b'^' {
-        num_worlds(col + 1, row, map, memo) + num_worlds(col - 1, row, map, memo)
-    } else {
-        num_worlds(col, row, map, memo)
-    };
-
-    memo[index] = count;
-    count
+        v
+    })
+    .count()
 }
 
 #[aoc(day7, part2)]
 pub fn part2(map: &Map) -> usize {
-    num_worlds(map.width / 2, ROW_STEP, map, &mut vec![0; map.data.len()])
+    count_paths(
+        (ROW_STEP, map.width / 2),
+        |&(row, col)| {
+            let mut v = ArrayVec::<_, 2>::new();
+            if row + ROW_STEP > map.height {
+            } else if map.data[(map.width + 1) * row + col] == b'^' {
+                v.push((row + ROW_STEP, col - 1));
+                v.push((row + ROW_STEP, col + 1));
+            } else {
+                v.push((row + ROW_STEP, col));
+            }
+
+            v
+        },
+        |&(row, _)| row == map.height,
+    )
 }
 
 #[cfg(test)]
