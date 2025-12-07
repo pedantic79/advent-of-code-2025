@@ -1,32 +1,45 @@
-use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use aoc_runner_derive::{aoc, aoc_generator};
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Object {}
+pub struct Map {
+    data: Vec<u8>,
+    width: usize,
+    height: usize,
+}
 
 #[aoc_generator(day7)]
-pub fn generator(input: &str) -> Vec<Vec<u8>> {
-    input.lines().map(|line| line.bytes().collect()).collect()
+pub fn generator(input: &str) -> Map {
+    let data = input.as_bytes().to_vec();
+    let width = input.lines().next().unwrap().len();
+    let height = input.lines().count();
+
+    Map {
+        data,
+        width,
+        height,
+    }
 }
 
 #[aoc(day7, part1)]
-pub fn part1(inputs: &[Vec<u8>]) -> usize {
-    let mut beams = HashSet::new();
-    let mut new_beams = HashSet::new();
-    new_beams.insert(inputs[0].len() / 2);
+pub fn part1(map: &Map) -> usize {
+    let mut beams = Vec::with_capacity(map.width);
+    let mut new_beams = Vec::with_capacity(map.width);
+    new_beams.push(map.width / 2);
     let mut count = 0;
 
-    for row in inputs.iter().skip(1) {
+    for row in 1..map.height {
         std::mem::swap(&mut beams, &mut new_beams);
         new_beams.clear();
+        beams.sort_unstable();
+        beams.dedup();
 
         for &beam in beams.iter() {
-            if row[beam] == b'^' {
-                new_beams.insert(beam + 1);
-                new_beams.insert(beam - 1);
+            if map.data[(map.width + 1) * row + beam] == b'^' {
+                new_beams.push(beam + 1);
+                new_beams.push(beam - 1);
                 count += 1;
             } else {
-                new_beams.insert(beam);
+                new_beams.push(beam);
             }
         }
     }
@@ -34,35 +47,31 @@ pub fn part1(inputs: &[Vec<u8>]) -> usize {
     count
 }
 
-fn num_worlds(
-    beam_col: usize,
-    row_num: usize,
-    inputs: &[Vec<u8>],
-    memo: &mut HashMap<(usize, usize), usize>,
-) -> usize {
-    if row_num >= inputs.len() {
+fn num_worlds(col: usize, row: usize, map: &Map, memo: &mut Vec<usize>) -> usize {
+    if row >= map.height {
         return 1;
     }
 
-    if let Some(&res) = memo.get(&(beam_col, row_num)) {
-        return res;
+    let index = row * (map.width + 1) + col;
+    let x = memo[index];
+    if x > 0 {
+        return x;
     }
 
-    let row = &inputs[row_num];
-    let count = if row[beam_col] == b'^' {
-        num_worlds(beam_col + 1, row_num + 1, inputs, memo)
-            + num_worlds(beam_col - 1, row_num + 1, inputs, memo)
+    let row = row + 1;
+    let count = if map.data[index] == b'^' {
+        num_worlds(col + 1, row, map, memo) + num_worlds(col - 1, row, map, memo)
     } else {
-        num_worlds(beam_col, row_num + 1, inputs, memo)
+        num_worlds(col, row, map, memo)
     };
 
-    memo.insert((beam_col, row_num), count);
+    memo[index] = count;
     count
 }
 
 #[aoc(day7, part2)]
-pub fn part2(inputs: &[Vec<u8>]) -> usize {
-    num_worlds(inputs[0].len() / 2, 1, inputs, &mut HashMap::new())
+pub fn part2(map: &Map) -> usize {
+    num_worlds(map.width / 2, 1, map, &mut vec![0; map.data.len()])
 }
 
 #[cfg(test)]
