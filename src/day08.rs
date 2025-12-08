@@ -18,16 +18,36 @@ impl UnionFind {
         }
     }
 
-    fn find(&mut self, x: usize) -> usize {
+    // This is faster for part1 but not part2
+    // this uses path splitting
+    fn find_p1(&mut self, mut x: usize) -> usize {
+        while self.parent[x] != x {
+            (x, self.parent[x]) = (self.parent[x], self.parent[self.parent[x]]);
+        }
+        x
+    }
+
+    fn union_p1(&mut self, x: usize, y: usize) -> bool {
+        let px = self.find_p1(x);
+        let py = self.find_p1(y);
+        if px == py {
+            return false;
+        }
+        self.parent[px] = py;
+        true
+    }
+
+    // this uses path compression
+    fn find_p2(&mut self, x: usize) -> usize {
         if self.parent[x] != x {
-            self.parent[x] = self.find(self.parent[x]);
+            self.parent[x] = self.find_p2(self.parent[x]);
         }
         self.parent[x]
     }
 
-    fn union(&mut self, x: usize, y: usize) -> bool {
-        let px = self.find(x);
-        let py = self.find(y);
+    fn union_p2(&mut self, x: usize, y: usize) -> bool {
+        let px = self.find_p2(x);
+        let py = self.find_p2(y);
         if px == py {
             return false;
         }
@@ -75,13 +95,13 @@ pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
 fn part1_solve<const COUNT: usize>(inputs: &[Coords], pairs: &[(usize, usize, usize)]) -> usize {
     let mut uf = UnionFind::new(inputs.len());
     for (_, i, j) in pairs.iter().take(COUNT).copied() {
-        uf.union(i, j);
+        uf.union_p1(i, j);
     }
 
     // build circuit counts from parent groups
     let mut circuits = vec![0; inputs.len()];
     for i in 0..inputs.len() {
-        circuits[uf.find(i)] += 1;
+        circuits[uf.find_p1(i)] += 1;
     }
 
     // Get longest 3 circuits
@@ -99,7 +119,7 @@ pub fn part2((inputs, pairs): &(Vec<Coords>, Vec<(usize, usize, usize)>)) -> usi
     let mut last_union = (0, 1);
     let mut uf = UnionFind::new(inputs.len());
     for (_, i, j) in pairs.iter().copied() {
-        if uf.union(i, j) {
+        if uf.union_p2(i, j) {
             last_union = (i, j);
         }
     }
