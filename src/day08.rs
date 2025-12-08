@@ -1,4 +1,3 @@
-use ahash::{HashSet, HashSetExt};
 use aoc_runner_derive::{aoc, aoc_generator};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -8,7 +7,36 @@ pub struct Coords {
     z: usize,
 }
 
-fn eucldean_distance(coord_a: &Coords, coord_b: &Coords) -> usize {
+struct UnionFind {
+    parent: Vec<usize>,
+}
+
+impl UnionFind {
+    fn new(n: usize) -> Self {
+        UnionFind {
+            parent: (0..n).collect(),
+        }
+    }
+
+    fn find(&mut self, x: usize) -> usize {
+        if self.parent[x] != x {
+            self.parent[x] = self.find(self.parent[x]);
+        }
+        self.parent[x]
+    }
+
+    fn union(&mut self, x: usize, y: usize) -> bool {
+        let px = self.find(x);
+        let py = self.find(y);
+        if px == py {
+            return false;
+        }
+        self.parent[px] = py;
+        true
+    }
+}
+
+fn euclidean_distance(coord_a: &Coords, coord_b: &Coords) -> usize {
     let dx = coord_a.x.abs_diff(coord_b.x);
     let dy = coord_a.y.abs_diff(coord_b.y);
     let dz = coord_a.z.abs_diff(coord_b.z);
@@ -17,8 +45,8 @@ fn eucldean_distance(coord_a: &Coords, coord_b: &Coords) -> usize {
 }
 
 #[aoc_generator(day8)]
-pub fn generator(input: &str) -> Vec<Coords> {
-    input
+pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
+    let inputs: Vec<Coords> = input
         .lines()
         .map(|line| {
             let mut parts = line.split(',').map(|num| num.parse::<usize>().unwrap());
@@ -28,102 +56,55 @@ pub fn generator(input: &str) -> Vec<Coords> {
                 z: parts.next().unwrap(),
             }
         })
-        .collect()
-}
+        .collect();
 
-fn part1_solve<const MAX: usize>(inputs: &[Coords]) -> usize {
     // find the pairs coordinates that are the closest to another coordinate
     let mut pairs = Vec::new();
 
     for (i, coord_a) in inputs.iter().enumerate() {
         for (j, coord_b) in inputs.iter().enumerate().skip(i + 1) {
-            let dist = eucldean_distance(coord_a, coord_b);
+            let dist = euclidean_distance(coord_a, coord_b);
             pairs.push((dist, i, j));
         }
     }
     pairs.sort_by_key(|(dist, _, _)| *dist);
 
-    let mut circuits: Vec<HashSet<usize>> = Vec::new();
-    for (_, i, j) in pairs[0..MAX].iter().copied() {
-        let found_i = circuits.iter().position(|circuit| circuit.contains(&i));
-        let found_j = circuits.iter().position(|circuit| circuit.contains(&j));
+    (inputs, pairs)
+}
 
-        match (found_i, found_j) {
-            (Some(ci), Some(cj)) if ci != cj => {
-                let to_merge = circuits[cj].clone();
-                circuits[ci].extend(to_merge.into_iter());
-                circuits.remove(cj);
-            }
-            (Some(ci), None) => {
-                circuits[ci].insert(j);
-            }
-            (None, Some(cj)) => {
-                circuits[cj].insert(i);
-            }
-            (None, None) => {
-                let mut new_circuit = HashSet::new();
-                new_circuit.insert(i);
-                new_circuit.insert(j);
-                circuits.push(new_circuit);
-            }
-            _ => {}
-        }
+fn part1_solve<const COUNT: usize>(inputs: &[Coords], pairs: &[(usize, usize, usize)]) -> usize {
+    let mut uf = UnionFind::new(inputs.len());
+    for (_, i, j) in pairs.iter().take(COUNT).copied() {
+        uf.union(i, j);
     }
 
-    circuits.sort_by_key(|x| std::cmp::Reverse(x.len()));
-    circuits[0..3].iter().map(|c| c.len()).product()
+    // build circuit lengths from parent groups
+    let mut circuits = vec![0; inputs.len()];
+    for i in 0..inputs.len() {
+        circuits[uf.find(i)] += 1;
+    }
+
+    // Get longest three circuits
+    circuits.sort_by_key(|&x| std::cmp::Reverse(x));
+    circuits[0..3].iter().product()
 }
 
 #[aoc(day8, part1)]
-pub fn part1(inputs: &[Coords]) -> usize {
-    part1_solve::<1000>(inputs)
+pub fn part1((inputs, pairs): &(Vec<Coords>, Vec<(usize, usize, usize)>)) -> usize {
+    part1_solve::<1000>(inputs, pairs)
 }
 
 #[aoc(day8, part2)]
-pub fn part2(inputs: &[Coords]) -> usize {
-    let mut pairs = Vec::new();
-
-    for (i, coord_a) in inputs.iter().enumerate() {
-        for (j, coord_b) in inputs.iter().enumerate().skip(i + 1) {
-            let dist = eucldean_distance(coord_a, coord_b);
-            pairs.push((dist, i, j));
-        }
-    }
-    pairs.sort_by_key(|(dist, _, _)| *dist);
-
+pub fn part2((inputs, pairs): &(Vec<Coords>, Vec<(usize, usize, usize)>)) -> usize {
     let mut last_union = (0, 1);
-    let mut circuits: Vec<HashSet<usize>> = Vec::new();
+    let mut uf = UnionFind::new(inputs.len());
     for (_, i, j) in pairs.iter().copied() {
-        let found_i = circuits.iter().position(|circuit| circuit.contains(&i));
-        let found_j = circuits.iter().position(|circuit| circuit.contains(&j));
-
-        match (found_i, found_j) {
-            (Some(ci), Some(cj)) if ci != cj => {
-                let to_merge = circuits[cj].clone();
-                circuits[ci].extend(to_merge.into_iter());
-                circuits.remove(cj);
-            }
-            (Some(ci), None) => {
-                circuits[ci].insert(j);
-            }
-            (None, Some(cj)) => {
-                circuits[cj].insert(i);
-            }
-            (None, None) => {
-                let mut new_circuit = HashSet::new();
-                new_circuit.insert(i);
-                new_circuit.insert(j);
-                circuits.push(new_circuit);
-            }
-            _ => {}
-        }
-
-        if circuits[0].len() == inputs.len() {
+        if uf.union(i, j) {
             last_union = (i, j);
-            break;
         }
     }
 
+    // Multiply x coordinates of the last union
     inputs[last_union.0].x * inputs[last_union.1].x
 }
 
@@ -161,7 +142,8 @@ mod tests {
 
     #[test]
     pub fn part1_test() {
-        assert_eq!(part1_solve::<10>(&generator(SAMPLE)), 40);
+        let (a, b) = &generator(SAMPLE);
+        assert_eq!(part1_solve::<10>(a, b), 40);
     }
 
     #[test]
