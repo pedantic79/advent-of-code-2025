@@ -1,39 +1,13 @@
-use aoc_runner_derive::{aoc, aoc_generator};
+use std::cmp::Reverse;
 
-#[derive(Debug, PartialEq, Eq)]
+use aoc_runner_derive::{aoc, aoc_generator};
+use pathfinding::prelude::{connected_components, kruskal};
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Coords {
     x: usize,
     y: usize,
     z: usize,
-}
-
-struct UnionFind {
-    parent: Vec<usize>,
-}
-
-impl UnionFind {
-    fn new(n: usize) -> Self {
-        UnionFind {
-            parent: (0..n).collect(),
-        }
-    }
-
-    fn find(&mut self, x: usize) -> usize {
-        if self.parent[x] != x {
-            self.parent[x] = self.find(self.parent[x]);
-        }
-        self.parent[x]
-    }
-
-    fn union(&mut self, x: usize, y: usize) -> bool {
-        let px = self.find(x);
-        let py = self.find(y);
-        if px == py {
-            return false;
-        }
-        self.parent[px] = py;
-        true
-    }
 }
 
 fn euclidean_distance(coord_a: &Coords, coord_b: &Coords) -> usize {
@@ -45,7 +19,7 @@ fn euclidean_distance(coord_a: &Coords, coord_b: &Coords) -> usize {
 }
 
 #[aoc_generator(day8)]
-pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
+pub fn generator(input: &str) -> (Vec<Coords>, Vec<(Coords, Coords, usize)>) {
     let inputs: Vec<Coords> = input
         .lines()
         .map(|line| {
@@ -62,50 +36,46 @@ pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
     let mut pairs = Vec::new();
 
     for (i, coord_a) in inputs.iter().enumerate() {
-        for (j, coord_b) in inputs.iter().enumerate().skip(i + 1) {
+        for coord_b in inputs.iter().skip(i + 1) {
             let dist = euclidean_distance(coord_a, coord_b);
-            pairs.push((dist, i, j));
+            pairs.push((*coord_a, *coord_b, dist));
         }
     }
-    pairs.sort_unstable_by_key(|(dist, _, _)| *dist);
+    pairs.sort_unstable_by_key(|(_, _, dist)| *dist);
 
     (inputs, pairs)
 }
 
-fn part1_solve<const COUNT: usize>(inputs: &[Coords], pairs: &[(usize, usize, usize)]) -> usize {
-    let mut uf = UnionFind::new(inputs.len());
-    for (_, i, j) in pairs.iter().take(COUNT).copied() {
-        uf.union(i, j);
-    }
+fn part1_solve<const COUNT: usize>(inputs: &[Coords], pairs: &[(Coords, Coords, usize)]) -> usize {
+    let mut sizes: Vec<_> = connected_components(inputs, |&n| {
+        pairs.iter().take(COUNT).filter_map(move |elem| {
+            if elem.0 == n {
+                Some(elem.1)
+            } else if elem.1 == n {
+                Some(elem.0)
+            } else {
+                None
+            }
+        })
+    })
+    .into_iter()
+    .map(|comp| comp.len())
+    .collect();
 
-    // build circuit counts from parent groups
-    let mut circuits = vec![0; inputs.len()];
-    for i in 0..inputs.len() {
-        circuits[uf.find(i)] += 1;
-    }
-
-    // Get longest 3 circuits
-    circuits.sort_unstable_by_key(|&x| std::cmp::Reverse(x));
-    circuits.into_iter().take(3).product()
+    sizes.sort_unstable_by_key(|&a| Reverse(a));
+    sizes.iter().take(3).product()
 }
 
 #[aoc(day8, part1)]
-pub fn part1((inputs, pairs): &(Vec<Coords>, Vec<(usize, usize, usize)>)) -> usize {
+pub fn part1((inputs, pairs): &(Vec<Coords>, Vec<(Coords, Coords, usize)>)) -> usize {
     part1_solve::<1000>(inputs, pairs)
 }
 
 #[aoc(day8, part2)]
-pub fn part2((inputs, pairs): &(Vec<Coords>, Vec<(usize, usize, usize)>)) -> usize {
-    let mut last_union = (0, 1);
-    let mut uf = UnionFind::new(inputs.len());
-    for (_, i, j) in pairs.iter().copied() {
-        if uf.union(i, j) {
-            last_union = (i, j);
-        }
-    }
+pub fn part2((_inputs, pairs): &(Vec<Coords>, Vec<(Coords, Coords, usize)>)) -> usize {
+    let last_edge = kruskal(pairs).last().unwrap();
 
-    // Multiply x coordinates of the last union
-    inputs[last_union.0].x * inputs[last_union.1].x
+    last_edge.0.x * last_edge.1.x
 }
 
 #[cfg(test)]
