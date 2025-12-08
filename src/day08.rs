@@ -67,7 +67,7 @@ pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
             pairs.push((dist, i, j));
         }
     }
-    pairs.sort_by_key(|(dist, _, _)| *dist);
+    pairs.sort_unstable_by_key(|(dist, _, _)| *dist);
 
     (inputs, pairs)
 }
@@ -78,15 +78,15 @@ fn part1_solve<const COUNT: usize>(inputs: &[Coords], pairs: &[(usize, usize, us
         uf.union(i, j);
     }
 
-    // build circuit lengths from parent groups
+    // build circuit counts from parent groups
     let mut circuits = vec![0; inputs.len()];
     for i in 0..inputs.len() {
         circuits[uf.find(i)] += 1;
     }
 
-    // Get longest three circuits
-    circuits.sort_by_key(|&x| std::cmp::Reverse(x));
-    circuits[0..3].iter().product()
+    // Get longest 3 circuits
+    circuits.sort_unstable_by_key(|&x| std::cmp::Reverse(x));
+    circuits.into_iter().take(3).product()
 }
 
 #[aoc(day8, part1)]
