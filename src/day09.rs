@@ -16,16 +16,12 @@ pub fn generator(input: &str) -> Vec<(i64, i64)> {
 
 #[aoc(day9, part1)]
 pub fn part1(inputs: &[(i64, i64)]) -> u64 {
-    let mut max = 0;
-    for (i, a) in inputs.iter().enumerate() {
-        for b in inputs[i + 1..].iter() {
-            let area = distance(*a, *b);
-            if area > max {
-                max = area;
-            }
-        }
-    }
-    max
+    inputs
+        .iter()
+        .tuple_combinations()
+        .map(|(a, b)| distance(*a, *b))
+        .max()
+        .unwrap_or(0)
 }
 
 fn sort_tuples(x: (i64, i64), y: (i64, i64)) -> ((i64, i64), (i64, i64)) {
@@ -36,7 +32,7 @@ fn sort_tuples(x: (i64, i64), y: (i64, i64)) -> ((i64, i64), (i64, i64)) {
 }
 
 fn less_than(x: (i64, i64), y: (i64, i64)) -> bool {
-    x.0 < y.0 && x.1 < y.1
+    x.1 < y.1 && x.0 < y.0
 }
 
 fn distance(a: (i64, i64), b: (i64, i64)) -> u64 {
@@ -45,29 +41,26 @@ fn distance(a: (i64, i64), b: (i64, i64)) -> u64 {
 
 #[aoc(day9, part2)]
 pub fn part2(inputs: &[(i64, i64)]) -> u64 {
-    let mut max = 0;
-
-    'outer: for (a, b) in inputs
+    inputs
         .iter()
         .tuple_combinations()
-        .map(|(x, y)| sort_tuples(*x, *y))
-    {
-        let area = distance(a, b);
+        .filter_map(|(x, y)| {
+            let (a, b) = sort_tuples(*x, *y);
 
-        for (c, d) in inputs
-            .iter()
-            .circular_tuple_windows()
-            .map(|(x, y)| sort_tuples(*x, *y))
-        {
-            if less_than(a, d) && less_than(c, b) {
-                continue 'outer;
+            for (c, d) in inputs
+                .iter()
+                .circular_tuple_windows()
+                .map(|(x, y)| sort_tuples(*x, *y))
+            {
+                if less_than(a, d) && less_than(c, b) {
+                    return None;
+                }
             }
-        }
 
-        max = area.max(max);
-    }
-
-    max
+            Some(distance(a, b))
+        })
+        .max()
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
