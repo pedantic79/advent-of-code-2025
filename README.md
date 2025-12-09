@@ -16,6 +16,8 @@
   - [solution](src/day07.rs)
 - [Day 8: Playground](https://adventofcode.com/2025/day/8)
   - [solution](src/day08.rs)
+- [Day 9: Movie Theater](https://adventofcode.com/2025/day/9)
+  - [solution](src/day09.rs)
 <!-- Insert before -->
 
 See:
