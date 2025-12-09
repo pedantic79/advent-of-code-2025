@@ -1,7 +1,5 @@
 use aoc_runner_derive::{aoc, aoc_generator};
-use geo::{Intersects, LineString, Polygon};
 use itertools::Itertools;
-use rayon::iter::{ParallelBridge, ParallelIterator};
 
 #[aoc_generator(day9)]
 pub fn generator(input: &str) -> Vec<(i64, i64)> {
@@ -21,7 +19,7 @@ pub fn part1(inputs: &[(i64, i64)]) -> u64 {
     let mut max = 0;
     for (i, a) in inputs.iter().enumerate() {
         for b in inputs[i + 1..].iter() {
-            let area = (a.0.abs_diff(b.0) + 1) * (a.1.abs_diff(b.1) + 1);
+            let area = distance(*a, *b);
             if area > max {
                 max = area;
             }
@@ -30,54 +28,46 @@ pub fn part1(inputs: &[(i64, i64)]) -> u64 {
     max
 }
 
-fn contains_border(polygon: &Polygon<i64>, a: (i64, i64), b: (i64, i64)) -> bool {
-    let min_x = a.0.min(b.0);
-    let max_x = a.0.max(b.0);
-    let min_y = a.1.min(b.1);
-    let max_y = a.1.max(b.1);
+fn sort_tuples(x: (i64, i64), y: (i64, i64)) -> ((i64, i64), (i64, i64)) {
+    let a = (x.0.min(y.0), x.1.min(y.1));
+    let b = (x.0.max(y.0), x.1.max(y.1));
 
-    for x in min_x..=max_x {
-        if !polygon.intersects(&geo::Point::new(x, min_y)) {
-            return false;
-        }
-        if !polygon.intersects(&geo::Point::new(x, max_y)) {
-            return false;
-        }
-    }
-    for y in min_y..=max_y {
-        if !polygon.intersects(&geo::Point::new(min_x, y)) {
-            return false;
-        }
-        if !polygon.intersects(&geo::Point::new(max_x, y)) {
-            return false;
-        }
-    }
-
-    true
+    (a, b)
 }
 
-// VERY SLOW
+fn less_than(x: (i64, i64), y: (i64, i64)) -> bool {
+    x.0 < y.0 && x.1 < y.1
+}
+
+fn distance(a: (i64, i64), b: (i64, i64)) -> u64 {
+    (a.0.abs_diff(b.0) + 1) * (a.1.abs_diff(b.1) + 1)
+}
+
 #[aoc(day9, part2)]
 pub fn part2(inputs: &[(i64, i64)]) -> u64 {
-    let line_string = LineString::from(inputs.to_vec());
-    let polygon = Polygon::new(line_string, vec![]);
+    let mut max = 0;
 
-    inputs
+    'outer: for (a, b) in inputs
         .iter()
-        .combinations(2)
-        .par_bridge()
-        .filter_map(|v| {
-            let a = v[0];
-            let b = v[1];
+        .tuple_combinations()
+        .map(|(x, y)| sort_tuples(*x, *y))
+    {
+        let area = distance(a, b);
 
-            if contains_border(&polygon, *a, *b) {
-                Some((a.0.abs_diff(b.0) + 1) * (a.1.abs_diff(b.1) + 1))
-            } else {
-                None
+        for (c, d) in inputs
+            .iter()
+            .circular_tuple_windows()
+            .map(|(x, y)| sort_tuples(*x, *y))
+        {
+            if less_than(a, d) && less_than(c, b) {
+                continue 'outer;
             }
-        })
-        .max()
-        .unwrap()
+        }
+
+        max = area.max(max);
+    }
+
+    max
 }
 
 #[cfg(test)]
@@ -122,7 +112,7 @@ mod tests {
             let output = generator(input);
 
             assert_eq!(part1(&output), ANSWERS.0);
-            // assert_eq!(part2(&output), ANSWERS.1);
+            assert_eq!(part2(&output), ANSWERS.1);
         }
     }
 }
