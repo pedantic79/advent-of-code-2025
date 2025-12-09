@@ -1,5 +1,6 @@
 use aoc_runner_derive::{aoc, aoc_generator};
 use itertools::Itertools;
+use wide::CmpLt;
 
 #[aoc_generator(day9)]
 pub fn generator(input: &str) -> Vec<(i64, i64)> {
@@ -31,8 +32,13 @@ fn sort_tuples(x: (i64, i64), y: (i64, i64)) -> ((i64, i64), (i64, i64)) {
     (a, b)
 }
 
-fn less_than(x: (i64, i64), y: (i64, i64)) -> bool {
-    x.1 < y.1 && x.0 < y.0
+// This is a hotspot so we use SIMD to speed it up
+// 48.852 ms -> 37.214 ms on benchmark of part2
+fn wide_less_than(a: (i64, i64), d: (i64, i64), c: (i64, i64), b: (i64, i64)) -> bool {
+    let less = wide::i64x4::from([a.0, a.1, c.0, c.1]);
+    let more = wide::i64x4::from([d.0, d.1, b.0, b.1]);
+
+    less.simd_lt(more).all()
 }
 
 fn distance(a: (i64, i64), b: (i64, i64)) -> u64 {
@@ -52,7 +58,7 @@ pub fn part2(inputs: &[(i64, i64)]) -> u64 {
                 .circular_tuple_windows()
                 .map(|(x, y)| sort_tuples(*x, *y))
             {
-                if less_than(a, d) && less_than(c, b) {
+                if wide_less_than(a, d, c, b) {
                     return None;
                 }
             }
