@@ -32,13 +32,18 @@ fn sort_tuples(x: (i64, i64), y: (i64, i64)) -> ((i64, i64), (i64, i64)) {
     (a, b)
 }
 
+fn tuples_to_array(a: (i64, i64), b: (i64, i64)) -> [i64; 4] {
+    [a.0, a.1, b.0, b.1]
+}
+
 // This is a hotspot so we use SIMD to speed it up
 // 48.852 ms -> 37.214 ms on benchmark of part2
-fn wide_less_than(a: (i64, i64), d: (i64, i64), c: (i64, i64), b: (i64, i64)) -> bool {
-    let less = wide::i64x4::from([a.0, a.1, c.0, c.1]);
-    let more = wide::i64x4::from([d.0, d.1, b.0, b.1]);
+pub fn wide_less_than(a: (i64, i64), d: (i64, i64), c: (i64, i64), b: (i64, i64)) -> bool {
+    let less = wide::i64x4::from(tuples_to_array(a, c));
+    let more = wide::i64x4::from(tuples_to_array(d, b));
 
     less.simd_lt(more).all()
+    // a.0 < d.0 && a.1 < d.1 && c.0 < b.0 && c.1 < b.1
 }
 
 fn distance(a: (i64, i64), b: (i64, i64)) -> u64 {
