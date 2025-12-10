@@ -5,7 +5,7 @@ use good_lp::{
 use nom::{
     IResult, Parser,
     bytes::complete::tag,
-    character::complete::{one_of, space0, space1},
+    character::complete::{one_of, space1},
     combinator,
     multi::{many0, separated_list0},
     sequence::delimited,
@@ -25,16 +25,15 @@ fn fewest_p1(target: &[bool], buttons: &[Vec<usize>]) -> usize {
     let output = pathfinding::prelude::bfs(
         &s,
         |state| {
-            let mut output = Vec::with_capacity(buttons.len());
-            for presses in buttons {
+            let state = state.clone();
+
+            buttons.iter().map(move |presses| {
                 let mut new_state = state.clone();
                 for &pos in presses {
                     new_state[pos] = !state[pos];
                 }
-                output.push(new_state);
-            }
-
-            output
+                new_state
+            })
         },
         |state| state == target,
     );
@@ -109,7 +108,7 @@ fn parse_machine(s: &str) -> IResult<&str, Machine> {
     )
     .parse(s)?;
 
-    let (s, _) = space0(s)?;
+    let (s, _) = space1(s)?;
 
     let (s, joltages) =
         delimited(tag("{"), separated_list0(tag(","), nom_usize), tag("}")).parse(s)?;
