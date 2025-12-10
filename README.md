@@ -18,6 +18,8 @@
   - [solution](src/day08.rs)
 - [Day 9: Movie Theater](https://adventofcode.com/2025/day/9)
   - [solution](src/day09.rs)
+- [Day 10: Factory](https://adventofcode.com/2025/day/10)
+  - [solution](src/day10.rs)
 <!-- Insert before -->
 
 See:
