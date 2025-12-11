@@ -20,6 +20,8 @@
   - [solution](src/day09.rs)
 - [Day 10: Factory](https://adventofcode.com/2025/day/10)
   - [solution](src/day10.rs)
+- [Day 11: Reactor](https://adventofcode.com/2025/day/11)
+  - [solution](src/day11.rs)
 <!-- Insert before -->
 
 See:
