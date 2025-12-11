@@ -1,40 +1,42 @@
 use ahash::HashMap;
 use aoc_runner_derive::{aoc, aoc_generator};
 
+use crate::common::sstr::SStr;
+
 #[aoc_generator(day11)]
-pub fn generator(input: &str) -> HashMap<String, Vec<String>> {
+pub fn generator(input: &str) -> HashMap<SStr<3>, Vec<SStr<3>>> {
     input
         .lines()
         .map(|line| {
             let (key, rest) = line.split_once(": ").unwrap();
-            let connections = rest.split(' ').map(String::from).collect::<Vec<_>>();
+            let connections = rest.split(' ').map(|s| s.into()).collect::<Vec<_>>();
 
-            (key.to_string(), connections)
+            (key.into(), connections)
         })
         .collect()
 }
 
 #[aoc(day11, part1)]
-pub fn part1(inputs: &HashMap<String, Vec<String>>) -> usize {
+pub fn part1(inputs: &HashMap<SStr<3>, Vec<SStr<3>>>) -> usize {
     pathfinding::prelude::count_paths(
-        "you".to_string(),
+        "you".into(),
         |current| inputs.get(current).cloned().unwrap_or_default(),
         |current| current == "out",
     )
 }
 
 #[aoc(day11, part2)]
-pub fn part2(inputs: &HashMap<String, Vec<String>>) -> usize {
+pub fn part2(inputs: &HashMap<SStr<3>, Vec<SStr<3>>>) -> usize {
     pathfinding::prelude::count_paths(
-        ("svr".to_string(), false, false),
-        |current: &(String, bool, bool)| {
-            let current = current.clone();
+        ("svr".into(), false, false),
+        |current| {
+            let current = *current;
 
             if let Some(neighbors) = inputs.get(&current.0) {
                 neighbors
                     .iter()
                     .map(move |x| {
-                        let x = x.to_string();
+                        let x = *x;
 
                         match x.as_str() {
                             "dac" => (x, true, current.2),
