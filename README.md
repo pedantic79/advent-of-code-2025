@@ -22,6 +22,8 @@
   - [solution](src/day10.rs)
 - [Day 11: Reactor](https://adventofcode.com/2025/day/11)
   - [solution](src/day11.rs)
+- [Day 12: Christmas Tree Farm](https://adventofcode.com/2025/day/12)
+  - [solution](src/day12.rs)
 <!-- Insert before -->
 
 See:
