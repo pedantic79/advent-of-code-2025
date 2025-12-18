@@ -148,6 +148,13 @@ fn build_pattern(
     (pattern, parity_pattern)
 }
 
+fn minimum(a: Option<usize>, b: usize) -> Option<usize> {
+    match a {
+        Some(x) => Some(x.min(b)),
+        None => Some(b),
+    }
+}
+
 /// Solves the minimum button presses needed to reach a goal state using divide-and-conquer.
 ///
 /// # Problem Statement
@@ -208,11 +215,11 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
     fn solve_aux(
         goal: &[usize],
         pattern_costs: &HashMap<Vec<bool>, HashMap<Vec<usize>, usize>>,
-        cache: &mut HashMap<Vec<usize>, usize>,
-    ) -> usize {
+        cache: &mut HashMap<Vec<usize>, Option<usize>>,
+    ) -> Option<usize> {
         // Base case: all zeros
         if goal.iter().all(|&x| x == 0) {
-            return 0;
+            return Some(0);
         }
 
         // Check cache
@@ -223,7 +230,7 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
         // Get parity pattern for current goal
         let parity_pattern: Vec<_> = goal.iter().map(|&x| x % 2 == 1).collect();
 
-        let mut answer = usize::MAX;
+        let mut answer = None;
 
         // Try all patterns that match the parity
         if let Some(patterns_for_parity) = pattern_costs.get(&parity_pattern) {
@@ -238,11 +245,9 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
                         .collect();
 
                     // Recurse with new goal, multiply cost by 2
-                    // if solve_aux returns usize::MAX, use saturating_* operations to keep value at usize::MAX
-                    let possible_min = pattern_cost.saturating_add(
-                        solve_aux(&new_goal, pattern_costs, cache).saturating_mul(2),
-                    );
-                    answer = answer.min(possible_min);
+                    if let Some(recursed_cost) = solve_aux(&new_goal, pattern_costs, cache) {
+                        answer = minimum(answer, pattern_cost + recursed_cost * 2);
+                    }
                 }
             }
         }
@@ -251,7 +256,7 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
         answer
     }
 
-    solve_aux(goal, &pattern_costs, &mut cache)
+    solve_aux(goal, &pattern_costs, &mut cache).unwrap_or(usize::MAX)
 }
 
 fn parse_machine(s: &str) -> IResult<&str, Machine> {
