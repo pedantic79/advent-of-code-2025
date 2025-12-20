@@ -213,7 +213,7 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
     let mut cache = Default::default();
 
     fn solve_aux(
-        goal: &[usize],
+        goal: Vec<usize>,
         pattern_costs: &HashMap<Vec<bool>, HashMap<Vec<usize>, usize>>,
         cache: &mut HashMap<Vec<usize>, Option<usize>>,
     ) -> Option<usize> {
@@ -223,7 +223,7 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
         }
 
         // Check cache
-        if let Some(&cached) = cache.get(goal) {
+        if let Some(&cached) = cache.get(&goal) {
             return cached;
         }
 
@@ -245,18 +245,18 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
                         .collect();
 
                     // Recurse with new goal, multiply cost by 2
-                    if let Some(recursed_cost) = solve_aux(&new_goal, pattern_costs, cache) {
+                    if let Some(recursed_cost) = solve_aux(new_goal, pattern_costs, cache) {
                         answer = minimum(answer, pattern_cost + recursed_cost * 2);
                     }
                 }
             }
         }
 
-        cache.insert(goal.to_vec(), answer);
+        cache.insert(goal, answer);
         answer
     }
 
-    solve_aux(goal, &pattern_costs, &mut cache).unwrap_or(usize::MAX)
+    solve_aux(goal.to_vec(), &pattern_costs, &mut cache).unwrap_or(usize::MAX)
 }
 
 fn parse_machine(s: &str) -> IResult<&str, Machine> {
