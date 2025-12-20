@@ -1,4 +1,7 @@
 use aoc_runner_derive::{aoc, aoc_generator};
+use nom::{IResult, Parser, bytes::complete::tag};
+
+use crate::common::nom::{nom_lines, nom_usize, process_input};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Coords {
@@ -64,22 +67,22 @@ fn euclidean_distance(coord_a: &Coords, coord_b: &Coords) -> usize {
     (dx * dx) + (dy * dy) + (dz * dz)
 }
 
+fn parse_coords(s: &str) -> IResult<&str, Coords> {
+    let (s, x) = nom_usize(s)?;
+    let (s, _) = tag(",").parse(s)?;
+    let (s, y) = nom_usize(s)?;
+    let (s, _) = tag(",").parse(s)?;
+    let (s, z) = nom_usize(s)?;
+
+    Ok((s, Coords { x, y, z }))
+}
+
 #[aoc_generator(day8)]
 pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
-    let inputs: Vec<Coords> = input
-        .lines()
-        .map(|line| {
-            let mut parts = line.split(',').map(|num| num.parse::<usize>().unwrap());
-            Coords {
-                x: parts.next().unwrap(),
-                y: parts.next().unwrap(),
-                z: parts.next().unwrap(),
-            }
-        })
-        .collect();
+    let inputs = process_input(nom_lines(parse_coords))(input);
 
     // find the pairs coordinates that are the closest to another coordinate
-    let mut pairs = Vec::new();
+    let mut pairs = Vec::with_capacity(inputs.len() * (inputs.len() - 1) / 2);
 
     for (i, coord_a) in inputs.iter().enumerate() {
         for (j, coord_b) in inputs.iter().enumerate().skip(i + 1) {
@@ -87,6 +90,7 @@ pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
             pairs.push((dist, i, j));
         }
     }
+
     pairs.sort_unstable_by_key(|(dist, _, _)| *dist);
 
     (inputs, pairs)
