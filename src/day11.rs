@@ -3,8 +3,12 @@ use aoc_runner_derive::{aoc, aoc_generator};
 
 use crate::common::sstr::SStr;
 
+// Using an ArrayVec will increase speed, but unncessary because it's already super fast.
+// type Vec<T> = arrayvec::ArrayVec<T, 32>;
+type String = SStr<3>;
+
 #[aoc_generator(day11)]
-pub fn generator(input: &str) -> HashMap<SStr<3>, Vec<SStr<3>>> {
+pub fn generator(input: &str) -> HashMap<String, Vec<String>> {
     input
         .lines()
         .map(|line| {
@@ -17,7 +21,7 @@ pub fn generator(input: &str) -> HashMap<SStr<3>, Vec<SStr<3>>> {
 }
 
 #[aoc(day11, part1)]
-pub fn part1(inputs: &HashMap<SStr<3>, Vec<SStr<3>>>) -> usize {
+pub fn part1(inputs: &HashMap<String, Vec<String>>) -> usize {
     pathfinding::prelude::count_paths(
         "you".into(),
         |current| inputs.get(current).cloned().unwrap_or_default(),
@@ -26,27 +30,21 @@ pub fn part1(inputs: &HashMap<SStr<3>, Vec<SStr<3>>>) -> usize {
 }
 
 #[aoc(day11, part2)]
-pub fn part2(inputs: &HashMap<SStr<3>, Vec<SStr<3>>>) -> usize {
+pub fn part2(inputs: &HashMap<String, Vec<String>>) -> usize {
     pathfinding::prelude::count_paths(
         ("svr".into(), false, false),
         |current| {
-            let current = *current;
-
             if let Some(neighbors) = inputs.get(&current.0) {
                 neighbors
                     .iter()
-                    .map(move |x| {
-                        let x = *x;
-
-                        match x.as_str() {
-                            "dac" => (x, true, current.2),
-                            "fft" => (x, current.1, true),
-                            _ => (x, current.1, current.2),
-                        }
+                    .map(move |&x| match x.as_str() {
+                        "dac" => (x, true, current.2),
+                        "fft" => (x, current.1, true),
+                        _ => (x, current.1, current.2),
                     })
                     .collect::<Vec<_>>()
             } else {
-                vec![]
+                Vec::new()
             }
         },
         |current| current.0 == "out" && current.1 && current.2,
