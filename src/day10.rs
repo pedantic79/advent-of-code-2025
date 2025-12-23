@@ -5,8 +5,7 @@ use nom::{
     IResult, Parser,
     bytes::complete::tag,
     character::complete::{one_of, space1},
-    combinator,
-    multi::{many0, separated_list0},
+    multi::{fold_many0, separated_list0},
     sequence::delimited,
 };
 
@@ -74,7 +73,7 @@ fn patterns(coeffs: &[u16], num_variables: usize) -> HashMap<u16, HashMap<Vec<us
     for num_pressed in 0..=coeffs.len() {
         // For each combination of buttons to press
         for buttons in (0..coeffs.len()).combinations(num_pressed) {
-            let (pattern, parity_pattern) = build_pattern(coeffs, num_variables, buttons);
+            let (pattern, parity_pattern) = build_pattern(coeffs, num_variables, &buttons);
 
             // Only store if we haven't seen this pattern for this parity before
             // (or if this achieves it with fewer button presses)
@@ -110,27 +109,22 @@ fn patterns(coeffs: &[u16], num_variables: usize) -> HashMap<u16, HashMap<Vec<us
 ///
 /// The parity pattern is crucial for the divide-and-conquer algorithm because it determines
 /// which patterns can be subtracted from a given goal state at each recursion level.
-pub fn build_pattern(
-    coeffs: &[u16],
-    num_variables: usize,
-    buttons: Vec<usize>,
-) -> (Vec<usize>, u16) {
-    // Calculate the pattern: how many times each joltage counter is incremented
+pub fn build_pattern(coeffs: &[u16], num_variables: usize, buttons: &[usize]) -> (Vec<usize>, u16) {
     let mut pattern = vec![0; num_variables];
-
-    // Calculate parity pattern as u16 bitmask (1 = odd, 0 = even)
     let mut parity_pattern = 0u16;
 
-    for button_mask in buttons
-        .into_iter()
-        .map(|i| unsafe { coeffs.get_unchecked(i) })
-    {
-        for (joltage_idx, p) in pattern.iter_mut().enumerate() {
-            let offset = 1 << joltage_idx;
-            if button_mask & offset != 0 {
-                *p += 1;
-                parity_pattern ^= offset;
-            }
+    for &button_idx in buttons {
+        let button_mask = unsafe { *coeffs.get_unchecked(button_idx) };
+
+        // Parity is simply XOR of all masks - O(1) per button
+        parity_pattern ^= button_mask;
+
+        // Sparse bit iteration: only visit set bits - O(popcount) per button
+        let mut remaining = button_mask;
+        while remaining != 0 {
+            let joltage_idx = remaining.trailing_zeros() as usize;
+            pattern[joltage_idx] += 1;
+            remaining &= remaining - 1; // Clear lowest set bit
         }
     }
 
@@ -253,18 +247,20 @@ fn solve_single(coeffs: &[u16], goal: &[usize]) -> usize {
 }
 
 fn parse_machine(s: &str) -> IResult<&str, Machine> {
-    let (s, bits) = delimited(
+    let (s, target_indicator) = delimited(
         tag("["),
-        many0(combinator::map(one_of("#."), |c| c == '#')),
+        fold_many0(
+            one_of("#."),
+            || (0u16, 0usize),
+            |(acc, idx), c| {
+                let new_acc = if c == '#' { acc | (1 << idx) } else { acc };
+                (new_acc, idx + 1)
+            },
+        ),
         tag("]"),
     )
+    .map(|(acc, _)| acc)
     .parse(s)?;
-
-    // Convert Vec<bool> to u16 by setting bits
-    let target_indicator = bits
-        .iter()
-        .enumerate()
-        .fold(0u16, |acc, (i, &b)| if b { acc | (1 << i) } else { acc });
 
     let (s, _) = space1(s)?;
 
