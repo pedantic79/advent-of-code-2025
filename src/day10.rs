@@ -14,27 +14,16 @@ use crate::common::nom::{nom_lines, nom_usize, process_input};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Machine {
-    pub target_indicator: Vec<bool>,
-    pub buttons: Vec<Vec<usize>>,
+    pub target_indicator: u16,
+    pub buttons: Vec<u16>,
     pub joltages: Vec<usize>,
 }
 
-fn fewest_p1(target: &[bool], buttons: &[Vec<usize>]) -> usize {
-    let s = vec![false; target.len()];
+fn fewest_p1(target: u16, buttons: &[u16]) -> usize {
     let output = pathfinding::prelude::bfs(
-        &s,
-        |state| {
-            let state = state.clone();
-
-            buttons.iter().map(move |presses| {
-                let mut new_state = state.clone();
-                for &pos in presses {
-                    new_state[pos] = !state[pos];
-                }
-                new_state
-            })
-        },
-        |state| state == target,
+        &0u16,
+        |&state| buttons.iter().map(move |&button_mask| state ^ button_mask),
+        |&state| state == target,
     );
 
     output.unwrap().len() - 1
@@ -78,10 +67,7 @@ fn fewest_p1(target: &[bool], buttons: &[Vec<usize>]) -> usize {
 /// - Cost: 2 button presses
 ///
 /// This gets stored as: `result[vec![true, false, true]][vec![1, 2, 1]] = 2`
-fn patterns(
-    coeffs: &[Vec<usize>],
-    num_variables: usize,
-) -> HashMap<Vec<bool>, HashMap<Vec<usize>, usize>> {
+fn patterns(coeffs: &[u16], num_variables: usize) -> HashMap<u16, HashMap<Vec<usize>, usize>> {
     let mut res = HashMap::new();
 
     // For each number of pressed buttons (0, 1, 2, ..., num_buttons)
@@ -124,23 +110,26 @@ fn patterns(
 ///
 /// The parity pattern is crucial for the divide-and-conquer algorithm because it determines
 /// which patterns can be subtracted from a given goal state at each recursion level.
-fn build_pattern(
-    coeffs: &[Vec<usize>],
+pub fn build_pattern(
+    coeffs: &[u16],
     num_variables: usize,
     buttons: Vec<usize>,
-) -> (Vec<usize>, Vec<bool>) {
+) -> (Vec<usize>, u16) {
     // Calculate the pattern: how many times each joltage counter is incremented
     let mut pattern = vec![0; num_variables];
 
-    // Calculate parity pattern (even=0, odd=1) for matching during solve
-    let mut parity_pattern = vec![false; num_variables];
+    // Calculate parity pattern as u16 bitmask (1 = odd, 0 = even)
+    let mut parity_pattern = 0u16;
 
-    for &button_idx in &buttons {
-        // Each button increments specific joltage counters (stored in coeffs)
-        for &joltage_idx in &coeffs[button_idx] {
-            if joltage_idx < num_variables {
-                pattern[joltage_idx] += 1;
-                parity_pattern[joltage_idx] ^= true;
+    for button_mask in buttons
+        .into_iter()
+        .map(|i| unsafe { coeffs.get_unchecked(i) })
+    {
+        for (joltage_idx, p) in pattern.iter_mut().enumerate() {
+            let offset = 1 << joltage_idx;
+            if button_mask & offset != 0 {
+                *p += 1;
+                parity_pattern ^= offset;
             }
         }
     }
@@ -208,13 +197,13 @@ fn minimum(a: Option<usize>, b: usize) -> Option<usize> {
 ///
 /// Uses memoization (caching) to avoid recomputing solutions for the same goal state.
 /// The saturating arithmetic ensures that unreachable goals don't cause overflow panics.
-fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
+fn solve_single(coeffs: &[u16], goal: &[usize]) -> usize {
     let pattern_costs = patterns(coeffs, goal.len());
     let mut cache = Default::default();
 
     fn solve_aux(
         goal: Vec<usize>,
-        pattern_costs: &HashMap<Vec<bool>, HashMap<Vec<usize>, usize>>,
+        pattern_costs: &HashMap<u16, HashMap<Vec<usize>, usize>>,
         cache: &mut HashMap<Vec<usize>, Option<usize>>,
     ) -> Option<usize> {
         // Base case: all zeros
@@ -227,8 +216,12 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
             return cached;
         }
 
-        // Get parity pattern for current goal
-        let parity_pattern: Vec<_> = goal.iter().map(|&x| x % 2 == 1).collect();
+        // Get parity pattern for current goal as u16 bitmask
+        let parity_pattern =
+            goal.iter().enumerate().fold(
+                0u16,
+                |acc, (i, &x)| if x % 2 == 1 { acc | (1 << i) } else { acc },
+            );
 
         let mut answer = None;
 
@@ -260,20 +253,32 @@ fn solve_single(coeffs: &[Vec<usize>], goal: &[usize]) -> usize {
 }
 
 fn parse_machine(s: &str) -> IResult<&str, Machine> {
-    let (s, target_indicator) = delimited(
+    let (s, bits) = delimited(
         tag("["),
         many0(combinator::map(one_of("#."), |c| c == '#')),
         tag("]"),
     )
     .parse(s)?;
 
+    // Convert Vec<bool> to u16 by setting bits
+    let target_indicator = bits
+        .iter()
+        .enumerate()
+        .fold(0u16, |acc, (i, &b)| if b { acc | (1 << i) } else { acc });
+
     let (s, _) = space1(s)?;
 
-    let (s, buttons) = separated_list0(
+    let (s, button_vecs) = separated_list0(
         tag(" "),
         delimited(tag("("), separated_list0(tag(","), nom_usize), tag(")")),
     )
     .parse(s)?;
+
+    // Convert each button's Vec<usize> to u16 bitmask
+    let buttons: Vec<u16> = button_vecs
+        .iter()
+        .map(|indices| indices.iter().fold(0u16, |acc, &idx| acc | (1 << idx)))
+        .collect();
 
     let (s, _) = space1(s)?;
 
@@ -299,7 +304,7 @@ pub fn generator(input: &str) -> Vec<Machine> {
 pub fn part1(inputs: &[Machine]) -> usize {
     inputs
         .iter()
-        .map(|m| fewest_p1(&m.target_indicator, &m.buttons))
+        .map(|m| fewest_p1(m.target_indicator, &m.buttons))
         .sum()
 }
 
