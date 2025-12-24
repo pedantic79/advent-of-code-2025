@@ -1,5 +1,6 @@
 use ahash::{HashMap, HashMapExt};
 use aoc_runner_derive::{aoc, aoc_generator};
+use arrayvec::ArrayVec;
 use itertools::Itertools;
 use nom::{
     IResult, Parser,
@@ -17,7 +18,7 @@ const MAX_BUTTONS: usize = 16;
 pub struct Machine {
     pub target_indicator: u16,
     pub buttons: Vec<u16>,
-    pub joltages: arrayvec::ArrayVec<u16, MAX_BUTTONS>,
+    pub joltages: ArrayVec<u16, MAX_BUTTONS>,
 }
 
 fn fewest_p1(target: u16, buttons: &[u16]) -> usize {
@@ -38,13 +39,13 @@ fn fewest_p1(target: u16, buttons: &[u16]) -> usize {
 ///
 /// # Returns
 ///
-/// `HashMap<parity_bitmask, HashMap<increment_pattern, min_button_presses>>`
+/// `HashMap<parity_bitmask, Vec<(increment_pattern, min_button_presses)>>`
 ///
 /// The parity-indexed structure enables divide-and-conquer: when we subtract a
 /// pattern and divide by 2, the parity changes, so we match against different
 /// pattern sets at each recursion level.
-fn patterns(coeffs: &[u16]) -> HashMap<u16, HashMap<[u16; MAX_BUTTONS], usize>> {
-    let mut res = HashMap::new();
+fn patterns(coeffs: &[u16]) -> HashMap<u16, Vec<([u16; MAX_BUTTONS], usize)>> {
+    let mut res: HashMap<u16, Vec<([u16; MAX_BUTTONS], usize)>> = HashMap::new();
 
     // For each number of pressed buttons (0, 1, 2, ..., num_buttons)
     for num_pressed in 0..=coeffs.len() {
@@ -53,11 +54,11 @@ fn patterns(coeffs: &[u16]) -> HashMap<u16, HashMap<[u16; MAX_BUTTONS], usize>> 
             let (pattern, parity_pattern) = build_pattern(coeffs, &buttons);
 
             // Only store if we haven't seen this pattern for this parity before
-            // (or if this achieves it with fewer button presses)
-            res.entry(parity_pattern)
-                .or_insert_with(HashMap::new)
-                .entry(pattern)
-                .or_insert(num_pressed);
+            // This was previously a HashMap of HashMap's but this is slightly better performance.
+            let patterns_vec = res.entry(parity_pattern).or_default();
+            if !patterns_vec.iter().any(|(p, _)| p == &pattern) {
+                patterns_vec.push((pattern, num_pressed));
+            }
         }
     }
 
@@ -79,6 +80,7 @@ pub fn build_pattern(coeffs: &[u16], buttons: &[usize]) -> ([u16; MAX_BUTTONS], 
     let mut parity_pattern = 0u16;
 
     for &button_idx in buttons {
+        // SAFETY: button_idx is guaranteed to be within bounds of coeffs slice
         let button_mask = unsafe { *coeffs.get_unchecked(button_idx) };
 
         // Parity is simply XOR of all masks - O(1) per button
@@ -115,22 +117,20 @@ fn minimum(a: Option<usize>, b: usize) -> Option<usize> {
 /// 3. Base case: goal is all zeros → cost 0
 ///
 /// Uses memoization to cache subproblem solutions.
-fn solve_single(coeffs: &[u16], goal: &[u16]) -> usize {
+fn solve_p2(coeffs: &[u16], goal: &[u16]) -> usize {
     let pattern_costs = patterns(coeffs);
-    let mut cache: HashMap<[u16; MAX_BUTTONS], Option<usize>> = Default::default();
+    let mut cache = Default::default();
 
-    // Convert goal slice to fixed-size array
-    let mut goal_arr = [0u16; MAX_BUTTONS];
-    goal_arr[..goal.len()].copy_from_slice(goal);
+    // Convert goal slice to ArrayVec
+    let goal_arr = goal.iter().copied().collect();
 
     fn solve_aux(
-        goal: [u16; MAX_BUTTONS],
-        num_vars: usize,
-        pattern_costs: &HashMap<u16, HashMap<[u16; MAX_BUTTONS], usize>>,
-        cache: &mut HashMap<[u16; MAX_BUTTONS], Option<usize>>,
+        goal: ArrayVec<u16, MAX_BUTTONS>,
+        pattern_costs: &HashMap<u16, Vec<([u16; MAX_BUTTONS], usize)>>,
+        cache: &mut HashMap<ArrayVec<u16, MAX_BUTTONS>, Option<usize>>,
     ) -> Option<usize> {
         // Base case: all zeros
-        if goal[..num_vars].iter().all(|&x| x == 0) {
+        if goal.iter().all(|&x| x == 0) {
             return Some(0);
         }
 
@@ -139,11 +139,11 @@ fn solve_single(coeffs: &[u16], goal: &[u16]) -> usize {
             return cached;
         }
 
+        let num_vars = goal.len();
+
         // Get parity pattern for current goal as u16 bitmask
-        let parity_pattern = goal[..num_vars]
-            .iter()
-            .enumerate()
-            .fold(
+        let parity_pattern =
+            goal.iter().enumerate().fold(
                 0u16,
                 |acc, (i, &x)| if x % 2 == 1 { acc | (1 << i) } else { acc },
             );
@@ -152,22 +152,22 @@ fn solve_single(coeffs: &[u16], goal: &[u16]) -> usize {
 
         // Try all patterns that match the parity
         if let Some(patterns_for_parity) = pattern_costs.get(&parity_pattern) {
-            for (pattern, &pattern_cost) in patterns_for_parity {
+            for (pattern, pattern_cost) in patterns_for_parity {
                 // Check if pattern fits within goal
                 if pattern[..num_vars]
                     .iter()
-                    .zip(goal[..num_vars].iter())
+                    .zip(goal.iter())
                     .all(|(&p, &g)| p <= g)
                 {
                     // Calculate new goal: (goal - pattern) / 2
-                    let mut new_goal = [0u16; MAX_BUTTONS];
-                    for i in 0..num_vars {
-                        new_goal[i] = (goal[i] - pattern[i]) / 2;
-                    }
+                    let new_goal = pattern[..num_vars]
+                        .iter()
+                        .zip(goal.iter())
+                        .map(|(&p, &g)| (g - p) / 2)
+                        .collect();
 
                     // Recurse with new goal, multiply cost by 2
-                    if let Some(recursed_cost) = solve_aux(new_goal, num_vars, pattern_costs, cache)
-                    {
+                    if let Some(recursed_cost) = solve_aux(new_goal, pattern_costs, cache) {
                         answer = minimum(answer, pattern_cost + recursed_cost * 2);
                     }
                 }
@@ -178,7 +178,7 @@ fn solve_single(coeffs: &[u16], goal: &[u16]) -> usize {
         answer
     }
 
-    solve_aux(goal_arr, goal.len(), &pattern_costs, &mut cache).unwrap_or(usize::MAX)
+    solve_aux(goal_arr, &pattern_costs, &mut cache).unwrap_or(usize::MAX)
 }
 
 fn parse_machine(s: &str) -> IResult<&str, Machine> {
@@ -213,15 +213,10 @@ fn parse_machine(s: &str) -> IResult<&str, Machine> {
 
     let (s, joltages) = delimited(
         tag("{"),
-        fold_separated_list0(
-            tag(","),
-            nom_u16,
-            arrayvec::ArrayVec::new,
-            |mut acc, item| {
-                acc.push(item);
-                acc
-            },
-        ),
+        fold_separated_list0(tag(","), nom_u16, ArrayVec::new, |mut acc, item| {
+            acc.push(item);
+            acc
+        }),
         tag("}"),
     )
     .parse(s)?;
@@ -253,7 +248,7 @@ pub fn part1(inputs: &[Machine]) -> usize {
 pub fn part2(inputs: &[Machine]) -> usize {
     inputs
         .iter()
-        .map(|m| solve_single(&m.buttons, &m.joltages))
+        .map(|m| solve_p2(&m.buttons, &m.joltages))
         .sum()
 }
 
