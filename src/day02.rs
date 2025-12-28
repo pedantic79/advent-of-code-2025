@@ -1,125 +1,94 @@
 use aoc_runner_derive::{aoc, aoc_generator};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Range {
-    left: String,
-    right: String,
+struct Range {
+    start: u64,
+    end: u64,
+    step: u64,
 }
 
-// precomputed multiples for lengths 0 to 10
-// (1..=n / 2).filter(|&k| n.is_multiple_of(k))
-const MULTIPLES: [&[usize]; 11] = [
-    &[],
-    &[],
-    &[1],
-    &[1],
-    &[1, 2],
-    &[1],
-    &[1, 2, 3],
-    &[1],
-    &[1, 2, 4],
-    &[1, 3],
-    &[1, 2, 5],
+/// Creates an arithmetic sequence for numbers formed by repeating a `size`-digit pattern
+/// to fill `digits` total digits.
+///
+/// Step = `(10^digits - 1) / (10^size - 1)` (geometric series multiplier for repetition).
+///
+/// Examples: `range(2,1)` → 11,22,...,99; `range(4,2)` → 1010,1111,...,9999
+const fn range(digits: u32, size: u32) -> Range {
+    let digits_power = 10u64.pow(digits);
+    let size_power = 10u64.pow(size);
+
+    let step = (digits_power - 1) / (size_power - 1);
+    let start = step * (size_power / 10);
+    let end = step * (size_power - 1);
+
+    Range { start, end, step }
+}
+
+/// Patterns repeated exactly 2 times: 11, 1212, 123123, etc.
+/// Base set for part 1; combined with SECOND/THIRD via inclusion-exclusion for part 2.
+const FIRST: &[Range] = &[
+    range(2, 1),
+    range(4, 2),
+    range(6, 3),
+    range(8, 4),
+    range(10, 5),
 ];
 
-fn parse_int_wrapper(f: impl Fn(&[u8]) -> bool, s: &[u8]) -> usize {
-    if f(s) {
-        unsafe { str::from_utf8_unchecked(s) }
-            .parse::<usize>()
-            .unwrap()
-    } else {
-        0
-    }
-}
+/// Patterns repeated 3+ times: 111, 12121, 121212, etc.
+/// Added in part 2 to cover numbers not in FIRST.
+const SECOND: &[Range] = &[
+    range(3, 1),
+    range(5, 1),
+    range(6, 2),
+    range(7, 1),
+    range(9, 3),
+    range(10, 2),
+];
 
-fn is_invalid_one(s: &[u8]) -> bool {
-    if !s.len().is_multiple_of(2) {
-        return false;
-    }
-    let (l, r) = s.split_at(s.len() / 2);
-    l == r
-}
+/// Overlap between FIRST and SECOND (6× and 10× repetitions).
+/// Subtracted in part 2: `FIRST + SECOND - THIRD`.
+const THIRD: &[Range] = &[range(6, 1), range(10, 1)];
 
-fn is_invalid_two(s: &[u8]) -> bool {
-    let n = s.len();
-    if n < 2 {
-        return false;
-    }
-
-    MULTIPLES[n].iter().any(|&k| {
-        let pattern = &s[0..k];
-
-        // the cycle version is much faster than the chunks, repeat, or step_by versions
-        // s.chunks(k).all(|chunk| chunk == pattern)
-        // pattern.repeat(n / k).into_iter().eq(s.iter().copied())
-        // (k..n).step_by(k).all(|i| &s[i..i + k] == pattern)
-
-        pattern.iter().cycle().take(s.len()).eq(s.iter())
-    })
-}
+type Pair = [u64; 2];
 
 #[aoc_generator(day2)]
-pub fn generator(input: &str) -> Vec<Range> {
+pub fn generator(input: &str) -> Vec<Pair> {
     input
         .split(',')
         .map(|group| {
             let (l, r) = group.split_once('-').unwrap();
 
-            Range {
-                left: l.to_string(),
-                right: r.to_string(),
-            }
+            [l.parse().unwrap(), r.parse().unwrap()]
         })
         .collect()
 }
 
-fn solve(inputs: &[Range], f: impl Fn(&[u8]) -> bool + Sync) -> usize {
-    inputs
-        .par_iter()
-        .map(|range| {
-            let start = range.left.parse::<usize>().unwrap();
-            let end = range.right.parse::<usize>().unwrap();
-
-            // Do math on the strings to loop through the range
-            let mut s = range.left.to_string().into_bytes();
-            let mut local_total = 0;
-            for x in start..=end {
-                local_total += parse_int_wrapper(&f, &s);
-                if x == end {
-                    break;
-                }
-
-                // loop through the positions in the sting from back to front
-                // to increment the number by 1
-                let len = s.len();
-                for i in (0..len).rev() {
-                    if s[i] == b'9' {
-                        s[i] = b'0';
-                        // We don't break here since we need to carry over
-                        if i == 0 {
-                            // Handle overflow
-                            s.insert(0, b'1');
-                        }
-                    } else {
-                        s[i] += 1;
-                        break;
-                    }
-                }
-            }
-            local_total
-        })
-        .sum()
-}
-
 #[aoc(day2, part1)]
-pub fn part1(inputs: &[Range]) -> usize {
-    solve(inputs, is_invalid_one)
+pub fn part1(input: &[Pair]) -> u64 {
+    sum(FIRST, input)
 }
 
 #[aoc(day2, part2)]
-pub fn part2(inputs: &[Range]) -> usize {
-    solve(inputs, is_invalid_two)
+pub fn part2(input: &[Pair]) -> u64 {
+    sum(FIRST, input) + sum(SECOND, input) - sum(THIRD, input)
+}
+
+fn sum(ranges: &[Range], input: &[Pair]) -> u64 {
+    let mut result = 0;
+
+    for &Range { start, end, step } in ranges.iter() {
+        for &[from, to] in input {
+            let lower = from.next_multiple_of(step).max(start);
+            let upper = to.min(end);
+
+            if lower <= upper {
+                let n = (upper - lower) / step;
+                let triangular = n * (n + 1) / 2;
+                result += lower * (n + 1) + step * triangular;
+            }
+        }
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -149,7 +118,7 @@ mod tests {
         use super::*;
 
         const INPUT: &str = include_str!("../input/2025/day2.txt");
-        const ANSWERS: (usize, usize) = (21139440284, 38731915928);
+        const ANSWERS: (u64, u64) = (21139440284, 38731915928);
 
         #[test]
         pub fn test() {
