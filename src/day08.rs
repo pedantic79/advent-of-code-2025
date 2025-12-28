@@ -1,4 +1,5 @@
 use aoc_runner_derive::{aoc, aoc_generator};
+use itertools::Itertools;
 use nom::{IResult, Parser, bytes::complete::tag};
 
 use crate::common::nom::{nom_lines, nom_usize, process_input};
@@ -12,49 +13,45 @@ pub struct Coords {
 
 struct UnionFind {
     parent: Vec<usize>,
+    rank: Vec<usize>,
 }
 
 impl UnionFind {
     fn new(n: usize) -> Self {
         UnionFind {
             parent: (0..n).collect(),
+            rank: vec![0; n],
         }
     }
 
-    // This is faster for part1 but not part2
-    // this uses path splitting
-    fn find_p1(&mut self, mut x: usize) -> usize {
+    fn find_path_halving(&mut self, mut x: usize) -> usize {
         while self.parent[x] != x {
-            (x, self.parent[x]) = (self.parent[x], self.parent[self.parent[x]]);
+            self.parent[x] = self.parent[self.parent[x]];
+            x = self.parent[x];
         }
+
         x
     }
 
-    fn union_p1(&mut self, x: usize, y: usize) -> bool {
-        let px = self.find_p1(x);
-        let py = self.find_p1(y);
+    // This implements path halving which was faster than path compression
+    // and path splitting for both parts.
+    fn union_path_halving(&mut self, x: usize, y: usize) -> bool {
+        let px = self.find_path_halving(x);
+        let py = self.find_path_halving(y);
         if px == py {
             return false;
         }
-        self.parent[px] = py;
-        true
-    }
 
-    // this uses path compression
-    fn find_p2(&mut self, x: usize) -> usize {
-        if self.parent[x] != x {
-            self.parent[x] = self.find_p2(self.parent[x]);
+        // Union by rank
+        match self.rank[px].cmp(&self.rank[py]) {
+            std::cmp::Ordering::Less => self.parent[px] = py,
+            std::cmp::Ordering::Greater => self.parent[py] = px,
+            std::cmp::Ordering::Equal => {
+                self.parent[px] = py;
+                self.rank[py] += 1;
+            }
         }
-        self.parent[x]
-    }
 
-    fn union_p2(&mut self, x: usize, y: usize) -> bool {
-        let px = self.find_p2(x);
-        let py = self.find_p2(y);
-        if px == py {
-            return false;
-        }
-        self.parent[px] = py;
         true
     }
 }
@@ -84,14 +81,16 @@ pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
     // find the pairs coordinates that are the closest to another coordinate
     let mut pairs = Vec::with_capacity(inputs.len() * (inputs.len() - 1) / 2);
 
-    for (i, coord_a) in inputs.iter().enumerate() {
-        for (j, coord_b) in inputs.iter().enumerate().skip(i + 1) {
-            let dist = euclidean_distance(coord_a, coord_b);
-            pairs.push((dist, i, j));
-        }
+    for (i, j) in (0..inputs.len()).tuple_combinations() {
+        // SAFETY: i and j are always less than inputs.len()
+        let coord_a = unsafe { inputs.get_unchecked(i) };
+        let coord_b = unsafe { inputs.get_unchecked(j) };
+
+        let dist = euclidean_distance(coord_a, coord_b);
+        pairs.push((dist, i, j));
     }
 
-    pairs.sort_unstable_by_key(|(dist, _, _)| *dist);
+    pairs.sort_unstable_by_key(|&(dist, _, _)| dist);
 
     (inputs, pairs)
 }
@@ -99,18 +98,30 @@ pub fn generator(input: &str) -> (Vec<Coords>, Vec<(usize, usize, usize)>) {
 fn part1_solve<const COUNT: usize>(inputs: &[Coords], pairs: &[(usize, usize, usize)]) -> usize {
     let mut uf = UnionFind::new(inputs.len());
     for (_, i, j) in pairs.iter().take(COUNT).copied() {
-        uf.union_p1(i, j);
+        uf.union_path_halving(i, j);
     }
 
     // build circuit counts from parent groups
     let mut circuits = vec![0; inputs.len()];
     for i in 0..inputs.len() {
-        circuits[uf.find_p1(i)] += 1;
+        circuits[uf.find_path_halving(i)] += 1;
     }
 
-    // Get longest 3 circuits
-    circuits.sort_unstable_by_key(|&x| std::cmp::Reverse(x));
-    circuits.into_iter().take(3).product()
+    // Get top 3 without full sort
+    let mut top3 = [0usize; 3];
+    for c in circuits {
+        if c > top3[0] {
+            top3[2] = top3[1];
+            top3[1] = top3[0];
+            top3[0] = c;
+        } else if c > top3[1] {
+            top3[2] = top3[1];
+            top3[1] = c;
+        } else if c > top3[2] {
+            top3[2] = c;
+        }
+    }
+    top3.into_iter().product()
 }
 
 #[aoc(day8, part1)]
@@ -122,9 +133,16 @@ pub fn part1((inputs, pairs): &(Vec<Coords>, Vec<(usize, usize, usize)>)) -> usi
 pub fn part2((inputs, pairs): &(Vec<Coords>, Vec<(usize, usize, usize)>)) -> usize {
     let mut last_union = (0, 1);
     let mut uf = UnionFind::new(inputs.len());
+    let mut unions_done = 0;
+    let target_unions = inputs.len() - 1;
+
     for (_, i, j) in pairs.iter().copied() {
-        if uf.union_p2(i, j) {
+        if uf.union_path_halving(i, j) {
             last_union = (i, j);
+            unions_done += 1;
+            if unions_done == target_unions {
+                break;
+            }
         }
     }
 
