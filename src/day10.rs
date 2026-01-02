@@ -1,7 +1,4 @@
-use ahash::{HashMap, HashMapExt};
 use aoc_runner_derive::{aoc, aoc_generator};
-use arrayvec::ArrayVec;
-use itertools::Itertools;
 use nom::{
     IResult, Parser,
     bytes::complete::tag,
@@ -10,175 +7,87 @@ use nom::{
     sequence::delimited,
 };
 
-use crate::common::nom::{fold_separated_list0, nom_lines, nom_u16, nom_usize, process_input};
-
-const MAX_BUTTONS: usize = 16;
+use crate::common::nom::{nom_lines, nom_u64, nom_usize, process_input};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Machine {
     pub target_indicator: u16,
-    pub buttons: Vec<u16>,
-    pub joltages: ArrayVec<u16, MAX_BUTTONS>,
+    /// buttons[i] contains the list of joltage indices that button i affects
+    pub buttons: Vec<Vec<usize>>,
+    pub joltages: Vec<u64>,
 }
 
-fn fewest_p1(target: u16, buttons: &[u16]) -> usize {
+fn fewest_p1(target: u16, buttons: &[Vec<usize>]) -> usize {
+    // Convert buttons to bitmasks for BFS
+    let button_masks: Vec<u16> = buttons
+        .iter()
+        .map(|indices| indices.iter().fold(0u16, |acc, &idx| acc | (1 << idx)))
+        .collect();
+
     let output = pathfinding::prelude::bfs(
         &0u16,
-        |&state| buttons.iter().map(move |&button_mask| state ^ button_mask),
+        |&state| button_masks.iter().map(move |&mask| state ^ mask),
         |&state| state == target,
     );
 
     output.unwrap().len() - 1
 }
 
-/// Pre-computes all possible increment patterns achievable by button combinations.
+/// Solves part 2 using Z3 SMT solver to minimize button presses.
 ///
-/// Iterates through all 2^n combinations of buttons and computes the resulting
-/// increment pattern for each. Patterns are indexed by their parity bitmask for
-/// efficient lookup during solving.
-///
-/// # Returns
-///
-/// `HashMap<parity_bitmask, Vec<(increment_pattern, min_button_presses)>>`
-///
-/// The parity-indexed structure enables divide-and-conquer: when we subtract a
-/// pattern and divide by 2, the parity changes, so we match against different
-/// pattern sets at each recursion level.
-fn patterns(coeffs: &[u16]) -> HashMap<u16, Vec<([u16; MAX_BUTTONS], usize)>> {
-    let mut res: HashMap<u16, Vec<([u16; MAX_BUTTONS], usize)>> = HashMap::new();
+/// Models the problem as: find non-negative integer multipliers x_i for each button
+/// such that sum(x_i * button_presses_j) = target_j for all joltage counters j,
+/// minimizing sum(x_i).
+fn solve_p2_z3(buttons: &[Vec<usize>], joltages: &[u64]) -> u64 {
+    use z3::ast::Int;
+    use z3::{Optimize, SatResult};
 
-    // For each number of pressed buttons (0, 1, 2, ..., num_buttons)
-    for num_pressed in 0..=coeffs.len() {
-        // For each combination of buttons to press
-        for buttons in (0..coeffs.len()).combinations(num_pressed) {
-            let (pattern, parity_pattern) = build_pattern(coeffs, &buttons);
+    let opt = Optimize::new();
 
-            // Only store if we haven't seen this pattern for this parity before
-            // This was previously a HashMap of HashMap's but this is slightly better performance.
-            let patterns_vec = res.entry(parity_pattern).or_default();
-            if !patterns_vec.iter().any(|(p, _)| p == &pattern) {
-                patterns_vec.push((pattern, num_pressed));
-            }
+    // Pre-build reverse mapping: joltage index -> list of button indices that affect it
+    let mut joltage_to_buttons = vec![Vec::new(); joltages.len()];
+    for (button_idx, indices) in buttons.iter().enumerate() {
+        for &joltage_idx in indices {
+            joltage_to_buttons[joltage_idx].push(button_idx);
         }
     }
 
-    res
-}
+    // Create integer variables for number of times each button is pressed
+    // and assert each is non-negative
+    let button_presses: Vec<_> = (0..buttons.len())
+        .map(|i| {
+            let var = Int::new_const(i as u32);
+            opt.assert(&var.ge(0));
+            var
+        })
+        .collect();
 
-/// Computes the increment pattern and parity for a button combination.
-///
-/// For each button pressed, XORs its bitmask into `parity_pattern` and uses
-/// sparse bit iteration (trailing_zeros + clear-lowest-bit) to increment
-/// only the affected counters in `pattern`.
-///
-/// # Returns
-///
-/// * `pattern[i]` - number of times counter `i` is incremented
-/// * `parity_pattern` - u16 bitmask where bit `i` = 1 if `pattern[i]` is odd
-pub fn build_pattern(coeffs: &[u16], buttons: &[usize]) -> ([u16; MAX_BUTTONS], u16) {
-    let mut pattern = [0u16; MAX_BUTTONS];
-    let mut parity_pattern = 0u16;
-
-    for &button_idx in buttons {
-        // SAFETY: button_idx is guaranteed to be within bounds of coeffs slice
-        let button_mask = unsafe { *coeffs.get_unchecked(button_idx) };
-
-        // Parity is simply XOR of all masks - O(1) per button
-        parity_pattern ^= button_mask;
-
-        // Sparse bit iteration: only visit set bits - O(popcount) per button
-        let mut remaining = button_mask;
-        while remaining != 0 {
-            let joltage_idx = remaining.trailing_zeros() as usize;
-            pattern[joltage_idx] += 1;
-            remaining &= remaining - 1; // Clear lowest set bit
+    // For each joltage counter, sum of button contributions must equal target
+    for (&target, contributing_buttons) in joltages.iter().zip(&joltage_to_buttons) {
+        if contributing_buttons.is_empty() {
+            // No button affects this joltage - target must be 0
+            opt.assert(&Int::from_u64(target).eq(0));
+        } else {
+            let sum: Int = contributing_buttons
+                .iter()
+                .map(|&i| &button_presses[i])
+                .sum();
+            opt.assert(&sum.eq(target));
         }
     }
 
-    (pattern, parity_pattern)
-}
+    // Minimize total button presses
+    let total: Int = button_presses.into_iter().sum();
+    opt.minimize(&total);
 
-fn minimum(a: Option<usize>, b: usize) -> Option<usize> {
-    match a {
-        Some(x) => Some(x.min(b)),
-        None => Some(b),
+    match opt.check(&[]) {
+        SatResult::Sat => opt
+            .get_model()
+            .and_then(|model| model.eval(&total, true))
+            .and_then(|res| res.as_u64())
+            .unwrap(),
+        _ => panic!("No solution found"),
     }
-}
-
-/// Finds minimum button presses to reach a goal state using divide-and-conquer.
-///
-/// # Algorithm
-///
-/// 1. Pre-compute all patterns indexed by parity via `patterns()`
-/// 2. Recursively decompose the goal:
-///    - Find patterns matching the goal's parity (so subtraction yields even values)
-///    - For each valid pattern: `new_goal = (goal - pattern) / 2`
-///    - Cost = pattern_cost + 2 × recurse(new_goal)
-/// 3. Base case: goal is all zeros → cost 0
-///
-/// Uses memoization to cache subproblem solutions.
-fn solve_p2(coeffs: &[u16], goal: &[u16]) -> usize {
-    let pattern_costs = patterns(coeffs);
-    let mut cache = Default::default();
-
-    // Convert goal slice to ArrayVec
-    let goal_arr = goal.iter().copied().collect();
-
-    fn solve_aux(
-        goal: ArrayVec<u16, MAX_BUTTONS>,
-        pattern_costs: &HashMap<u16, Vec<([u16; MAX_BUTTONS], usize)>>,
-        cache: &mut HashMap<ArrayVec<u16, MAX_BUTTONS>, Option<usize>>,
-    ) -> Option<usize> {
-        // Base case: all zeros
-        if goal.iter().all(|&x| x == 0) {
-            return Some(0);
-        }
-
-        // Check cache
-        if let Some(&cached) = cache.get(&goal) {
-            return cached;
-        }
-
-        let num_vars = goal.len();
-
-        // Get parity pattern for current goal as u16 bitmask
-        let parity_pattern =
-            goal.iter().enumerate().fold(
-                0u16,
-                |acc, (i, &x)| if x % 2 == 1 { acc | (1 << i) } else { acc },
-            );
-
-        let mut answer = None;
-
-        // Try all patterns that match the parity
-        if let Some(patterns_for_parity) = pattern_costs.get(&parity_pattern) {
-            for (pattern, pattern_cost) in patterns_for_parity {
-                // Check if pattern fits within goal
-                if pattern[..num_vars]
-                    .iter()
-                    .zip(goal.iter())
-                    .all(|(&p, &g)| p <= g)
-                {
-                    // Calculate new goal: (goal - pattern) / 2
-                    let new_goal = pattern[..num_vars]
-                        .iter()
-                        .zip(goal.iter())
-                        .map(|(&p, &g)| (g - p) / 2)
-                        .collect();
-
-                    // Recurse with new goal, multiply cost by 2
-                    if let Some(recursed_cost) = solve_aux(new_goal, pattern_costs, cache) {
-                        answer = minimum(answer, pattern_cost + recursed_cost * 2);
-                    }
-                }
-            }
-        }
-
-        cache.insert(goal, answer);
-        answer
-    }
-
-    solve_aux(goal_arr, &pattern_costs, &mut cache).unwrap_or(usize::MAX)
 }
 
 fn parse_machine(s: &str) -> IResult<&str, Machine> {
@@ -201,25 +110,14 @@ fn parse_machine(s: &str) -> IResult<&str, Machine> {
 
     let (s, buttons) = separated_list0(
         tag(" "),
-        delimited(
-            tag("("),
-            fold_separated_list0(tag(","), nom_usize, || 0u16, |acc, idx| acc | (1 << idx)),
-            tag(")"),
-        ),
+        delimited(tag("("), separated_list0(tag(","), nom_usize), tag(")")),
     )
     .parse(s)?;
 
     let (s, _) = space1(s)?;
 
-    let (s, joltages) = delimited(
-        tag("{"),
-        fold_separated_list0(tag(","), nom_u16, ArrayVec::new, |mut acc, item| {
-            acc.push(item);
-            acc
-        }),
-        tag("}"),
-    )
-    .parse(s)?;
+    let (s, joltages) =
+        delimited(tag("{"), separated_list0(tag(","), nom_u64), tag("}")).parse(s)?;
 
     Ok((
         s,
@@ -245,10 +143,10 @@ pub fn part1(inputs: &[Machine]) -> usize {
 }
 
 #[aoc(day10, part2)]
-pub fn part2(inputs: &[Machine]) -> usize {
+pub fn part2(inputs: &[Machine]) -> u64 {
     inputs
         .iter()
-        .map(|m| solve_p2(&m.buttons, &m.joltages))
+        .map(|m| solve_p2_z3(&m.buttons, &m.joltages))
         .sum()
 }
 
@@ -281,7 +179,7 @@ mod tests {
         use super::*;
 
         const INPUT: &str = include_str!("../input/2025/day10.txt");
-        const ANSWERS: (usize, usize) = (452, 17424);
+        const ANSWERS: (usize, u64) = (452, 17424);
 
         #[test]
         pub fn test() {
