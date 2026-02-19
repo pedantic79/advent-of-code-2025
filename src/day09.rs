@@ -53,6 +53,7 @@ fn build_edge_lists(inputs: &[[i64; 2]]) -> (Vec<Edge>, Vec<Edge>) {
 
     debug_assert_eq!(vertical.capacity(), n / 2);
     debug_assert_eq!(horizontal.capacity(), n / 2);
+    debug_assert_eq!(vertical.len(), horizontal.len());
 
     vertical.sort_unstable();
     horizontal.sort_unstable();
