@@ -77,8 +77,8 @@ pub fn part1((nums, ops): &(Vec<ArrayVec<[u8; 4], 4>>, Vec<u8>)) -> u64 {
     total
 }
 
-fn rotate_numbers(nums: &[[u8; 4]]) -> Vec<u64> {
-    let mut res = Vec::new();
+fn rotate_numbers(nums: &[[u8; 4]]) -> ArrayVec<u64, 4> {
+    let mut res = ArrayVec::<u64, 4>::new();
 
     for amount in 0..4 {
         let n = nums
@@ -98,6 +98,7 @@ fn rotate_numbers(nums: &[[u8; 4]]) -> Vec<u64> {
 #[aoc(day6, part2)]
 pub fn part2((nums, ops): &(Vec<ArrayVec<[u8; 4], 4>>, Vec<u8>)) -> u64 {
     let mut total = 0;
+
     for (num_col, op) in nums.iter().zip(ops.iter()) {
         let rotated = rotate_numbers(num_col);
 
@@ -134,8 +135,8 @@ mod tests {
     #[test]
     pub fn rotate_numbers_test() {
         assert_eq!(
-            rotate_numbers(&[*b"  6 ", *b" 45 ", *b"123 "]),
-            vec![1, 24, 356]
+            &rotate_numbers(&[*b"  6 ", *b" 45 ", *b"123 "]),
+            &[1, 24, 356][..]
         );
     }
 
