@@ -29,26 +29,68 @@ pub fn part1(inputs: &HashMap<String, Vec<String>>) -> usize {
     )
 }
 
+/// Counts paths to "out" with specific visitor requirements using domain-specific optimization.
+///
+/// This function is much faster than the general-purpose count_paths because it:
+/// 1. **Encodes state directly in return values** instead of exploring all state combinations:
+///    - count.0: total paths from this node to "out"
+///    - count.1: paths that have visited "dac" (node marker)
+///    - count.2: paths that have visited both "dac" AND "fft" (final state)
+///
+/// 2. **Avoids state explosion**: count_paths would require the use of a tuple to keep track
+///    of (location, visited_dac, visited_fft) and explores every combination. This creates many
+///    duplicate states. count_part2 instead aggregates all paths upward, then marks states at
+///    the important nodes ("dac", "fft").
+///
+/// 3. **Single memoization pass**: Caches only one value per node instead of many (location, bool, bool)
+///    combinations, dramatically reducing cache lookups and memory.
+///
+/// 4. **Linear traversal**: Works bottom-up from "out", accumulating path information, rather
+///    than top-down exploration generating all possible state permutations.
+fn count_part2(
+    inputs: &HashMap<String, Vec<String>>,
+    s: &String,
+    memo: &mut HashMap<String, (usize, usize, usize)>,
+) -> (usize, usize, usize) {
+    // Return cached result if already computed to avoid recalculation
+    if let Some(&cached) = memo.get(s) {
+        return cached;
+    }
+
+    // Base case: reaching "out" is 1 valid path with no special visitors yet
+    if s == "out" {
+        return (1, 0, 0);
+    }
+
+    // Recursively sum path counts from all neighbors
+    let mut count = (0, 0, 0);
+    if let Some(neighbors) = inputs.get(s) {
+        for neighbor in neighbors {
+            let (c1, c2, c3) = count_part2(inputs, neighbor, memo);
+            count.0 += c1; // Accumulate all paths to "out"
+            count.1 += c2; // Accumulate paths that visited "dac"
+            count.2 += c3; // Accumulate paths that visited both "dac" and "fft"
+        }
+    }
+
+    // Mark the "dac" node: all paths from here count as having visited "dac"
+    if s == "dac" {
+        count.1 = count.0;
+    }
+
+    // Mark the "fft" node: count.1 (paths that visited "dac") now qualify as visited both
+    if s == "fft" {
+        count.2 = count.1;
+    }
+
+    // Cache this node's result for future lookups
+    memo.insert(*s, count);
+    count
+}
+
 #[aoc(day11, part2)]
 pub fn part2(inputs: &HashMap<String, Vec<String>>) -> usize {
-    pathfinding::prelude::count_paths(
-        ("svr".into(), false, false),
-        |current| {
-            if let Some(neighbors) = inputs.get(&current.0) {
-                neighbors
-                    .iter()
-                    .map(move |&x| match x.as_str() {
-                        "dac" => (x, true, current.2),
-                        "fft" => (x, current.1, true),
-                        _ => (x, current.1, current.2),
-                    })
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            }
-        },
-        |current| current.0 == "out" && current.1 && current.2,
-    )
+    count_part2(inputs, &"svr".into(), &mut Default::default()).2
 }
 
 #[cfg(test)]
