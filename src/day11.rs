@@ -1,4 +1,4 @@
-use ahash::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use aoc_runner_derive::{aoc, aoc_generator};
 
 use crate::common::sstr::SStr;

@@ -1,4 +1,5 @@
-use ahash::{HashMap, HashMapExt};
+use ahash::HashMapExt;
+use rustc_hash::FxHashMap as HashMap;
 use aoc_runner_derive::{aoc, aoc_generator};
 use arrayvec::ArrayVec;
 use itertools::Itertools;
