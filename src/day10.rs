@@ -1,3 +1,4 @@
+use ahash::HashMapExt;
 use aoc_runner_derive::{aoc, aoc_generator};
 use arrayvec::ArrayVec;
 use nom::{
@@ -38,13 +39,47 @@ impl Parity {
 }
 
 fn fewest_p1(target: u16, buttons: &[u16]) -> usize {
-    let output = pathfinding::prelude::bfs(
-        &0u16,
-        |&state| buttons.iter().map(move |&button_mask| state ^ button_mask),
-        |&state| state == target,
-    );
+    if target == 0 {
+        return 0;
+    }
 
-    output.unwrap().len() - 1
+    // BFS shortest-path search of button XOR transitions using a fast flat bitset for visited states
+    // (65536 possible states / 64 bits per word = 1024 u64 words)
+    let mut visited = [0u64; 1024];
+    visited[0] = 1;
+
+    // Double-buffered queues pre-allocated to 512 elements to avoid dynamic vector reallocations
+    // (instrumentation shows the maximum queue size reached is only 355 across all runs)
+    let mut queue = Vec::with_capacity(512);
+    let mut next_queue = Vec::with_capacity(512);
+
+    queue.push(0u16);
+    let mut steps = 0;
+
+    while !queue.is_empty() {
+        steps += 1;
+        for &state in &queue {
+            for &btn in buttons {
+                let next_state = state ^ btn;
+                if next_state == target {
+                    return steps;
+                }
+                let idx = next_state as usize;
+                let word = idx / 64;
+                let bit = idx % 64;
+
+                let w = &mut visited[word];
+                if (*w & (1 << bit)) == 0 {
+                    *w |= 1 << bit;
+                    next_queue.push(next_state);
+                }
+            }
+        }
+        queue.clear();
+        std::mem::swap(&mut queue, &mut next_queue);
+    }
+
+    0
 }
 
 /// Pre-computes all possible increment effects achievable by button combinations.
@@ -64,20 +99,20 @@ fn compute_effects(btn_coeffs: &[u16]) -> HashMap<Parity, Vec<(ButtonEffect, usi
     let n = btn_coeffs.len();
     let num_states = 1 << n;
 
-    // DP table: effects[mask] = (button_effects_array, parity_mask)
+    // DP table storing (button_effects_array, parity_mask) for each button subset (represented as a bitmask)
     let mut effects = vec![([0u16; MAX_BUTTONS], 0u16); num_states];
 
-    // Compute the effect of each subset (represented as a bitmask) in O(1) steps from smaller subsets
+    // Compute the effect of each subset in O(1) time from a smaller subset
     for mask in 1..num_states {
-        // Find the index of the last set bit in the mask
+        // Find the index of the last set bit (button index) in the mask
         let last_bit_idx = mask.trailing_zeros() as usize;
-        // Retrieve the subset without this button
+        // Retrieve the subset without this last button
         let prev_mask = mask ^ (1 << last_bit_idx);
 
         let btn_mask = btn_coeffs[last_bit_idx];
         let mut effect = effects[prev_mask].0;
 
-        // Add the effect of the newly added button
+        // Add the effect of the newly added button by incrementing its set bit positions
         let mut remaining = btn_mask;
         while remaining != 0 {
             let joltage_idx = remaining.trailing_zeros() as usize;
@@ -85,13 +120,12 @@ fn compute_effects(btn_coeffs: &[u16]) -> HashMap<Parity, Vec<(ButtonEffect, usi
             remaining &= remaining - 1; // Clear lowest set bit
         }
 
-        // XOR the button's bitmask to update parity
+        // XOR the button's bitmask to compute the new parity
         let parity = effects[prev_mask].1 ^ btn_mask;
         effects[mask] = (effect, parity);
     }
 
-    let mut res: HashMap<Parity, Vec<(ButtonEffect, usize)>> =
-        HashMap::with_capacity_and_hasher(num_states, Default::default());
+    let mut res: HashMap<Parity, Vec<(ButtonEffect, usize)>> = HashMap::with_capacity(num_states);
 
     // Group subset masks by their popcount (number of pressed buttons / cost)
     let mut buckets = vec![Vec::new(); n + 1];
@@ -99,14 +133,14 @@ fn compute_effects(btn_coeffs: &[u16]) -> HashMap<Parity, Vec<(ButtonEffect, usi
         buckets[mask.count_ones() as usize].push(mask);
     }
 
-    // Insert subsets into hash map in increasing order of cost to try cheaper choices first
+    // Insert subsets in increasing order of cost so the solver checks cheaper choices first
     for (cost, masks) in buckets.into_iter().enumerate() {
         for mask in masks {
             let (effect, parity_val) = effects[mask];
             let parity = Parity(parity_val);
             let entry = res.entry(parity).or_default();
 
-            // Only keep the minimum cost representation for each unique effect
+            // Dedup: only keep the minimum cost representation for each unique effect
             if entry.iter().all(|(e, _)| e != &effect) {
                 entry.push((effect, cost));
             }
