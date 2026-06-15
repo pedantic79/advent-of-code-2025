@@ -1,8 +1,5 @@
-use ahash::HashMapExt;
-use rustc_hash::FxHashMap as HashMap;
 use aoc_runner_derive::{aoc, aoc_generator};
 use arrayvec::ArrayVec;
-use itertools::Itertools;
 use nom::{
     IResult, Parser,
     bytes::complete::tag,
@@ -10,6 +7,7 @@ use nom::{
     multi::{fold_many0, separated_list0},
     sequence::delimited,
 };
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::common::nom::{fold_separated_list0, nom_lines, nom_u16, nom_usize, process_input};
 
@@ -63,19 +61,54 @@ fn fewest_p1(target: u16, buttons: &[u16]) -> usize {
 /// effect and divide by 2, the parity changes, so we match against different
 /// effect sets at each recursion level.
 fn compute_effects(btn_coeffs: &[u16]) -> HashMap<Parity, Vec<(ButtonEffect, usize)>> {
-    let mut res: HashMap<_, Vec<_>> = HashMap::new();
+    let n = btn_coeffs.len();
+    let num_states = 1 << n;
 
-    // For each number of pressed buttons (0, 1, 2, ..., num_buttons)
-    for num_pressed in 0..=btn_coeffs.len() {
-        // For each combination of buttons to press
-        for btn_combinations in (0..btn_coeffs.len()).combinations(num_pressed) {
-            let (effect, parity) = compute_effect(btn_coeffs, &btn_combinations);
+    // DP table: effects[mask] = (button_effects_array, parity_mask)
+    let mut effects = vec![([0u16; MAX_BUTTONS], 0u16); num_states];
 
-            // Only store if we haven't seen this effect for this parity before
-            // This was previously a HashMap of HashMap's but this is slightly better performance.
+    // Compute the effect of each subset (represented as a bitmask) in O(1) steps from smaller subsets
+    for mask in 1..num_states {
+        // Find the index of the last set bit in the mask
+        let last_bit_idx = mask.trailing_zeros() as usize;
+        // Retrieve the subset without this button
+        let prev_mask = mask ^ (1 << last_bit_idx);
+
+        let btn_mask = btn_coeffs[last_bit_idx];
+        let mut effect = effects[prev_mask].0;
+
+        // Add the effect of the newly added button
+        let mut remaining = btn_mask;
+        while remaining != 0 {
+            let joltage_idx = remaining.trailing_zeros() as usize;
+            effect[joltage_idx] += 1;
+            remaining &= remaining - 1; // Clear lowest set bit
+        }
+
+        // XOR the button's bitmask to update parity
+        let parity = effects[prev_mask].1 ^ btn_mask;
+        effects[mask] = (effect, parity);
+    }
+
+    let mut res: HashMap<Parity, Vec<(ButtonEffect, usize)>> =
+        HashMap::with_capacity_and_hasher(num_states, Default::default());
+
+    // Group subset masks by their popcount (number of pressed buttons / cost)
+    let mut buckets = vec![Vec::new(); n + 1];
+    for mask in 0..num_states {
+        buckets[mask.count_ones() as usize].push(mask);
+    }
+
+    // Insert subsets into hash map in increasing order of cost to try cheaper choices first
+    for (cost, masks) in buckets.into_iter().enumerate() {
+        for mask in masks {
+            let (effect, parity_val) = effects[mask];
+            let parity = Parity(parity_val);
             let entry = res.entry(parity).or_default();
+
+            // Only keep the minimum cost representation for each unique effect
             if entry.iter().all(|(e, _)| e != &effect) {
-                entry.push((effect, num_pressed));
+                entry.push((effect, cost));
             }
         }
     }
